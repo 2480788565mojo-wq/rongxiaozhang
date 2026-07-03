@@ -1,0 +1,38 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+*.local
+
+# Editor directories and files
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+
+# 微信开发者工具
+project.config.json
+project.private.config.json
+
+# 操作系统
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 环境变量
+.env
+.env.*

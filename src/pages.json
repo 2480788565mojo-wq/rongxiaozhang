@@ -1,0 +1,83 @@
+{
+	"easycom": {
+		"autoscan": true,
+		"custom": {
+			"^u-(.*)": "uview-plus/components/u-$1/u-$1.vue"
+		}
+	},
+	"pages": [
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "荣小账"
+			}
+		},
+		{
+			"path": "pages/add/index",
+			"style": {
+				"navigationBarTitleText": "记一笔"
+			}
+		},
+		{
+			"path": "pages/bills/index",
+			"style": {
+				"navigationBarTitleText": "账单"
+			}
+		},
+		{
+			"path": "pages/stats/index",
+			"style": {
+				"navigationBarTitleText": "统计"
+			}
+		},
+		{
+			"path": "pages/accounts/index",
+			"style": {
+				"navigationBarTitleText": "账户管理"
+			}
+		},
+		{
+			"path": "pages/budget/index",
+			"style": {
+				"navigationBarTitleText": "预算管理"
+			}
+		},
+		{
+			"path": "pages/settings/index",
+			"style": {
+				"navigationBarTitleText": "设置"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "荣小账",
+		"navigationBarBackgroundColor": "#F8F8F8",
+		"backgroundColor": "#F8F8F8"
+	},
+	"tabBar": {
+		"color": "#999",
+		"selectedColor": "#2979ff",
+		"backgroundColor": "#fff",
+		"borderStyle": "black",
+		"height": "110rpx",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "首页"
+			},
+			{
+				"pagePath": "pages/stats/index",
+				"text": "统计"
+			},
+			{
+				"pagePath": "pages/bills/index",
+				"text": "账单"
+			},
+			{
+				"pagePath": "pages/settings/index",
+				"text": "我的"
+			}
+		]
+	}
+}

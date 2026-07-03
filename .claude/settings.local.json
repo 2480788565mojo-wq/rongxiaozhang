@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "Bash(cd /tmp)",
+      "Bash(npx degit *)",
+      "Bash(npm config *)",
+      "Bash(ls -la /tmp/rongxiaozhang-temp/)",
+      "Read(//tmp/**)",
+      "Bash(npm install *)",
+      "Bash(npx uni *)",
+      "Bash(mkdir -p \"d:/黑马记账APP/src/static/tabbar\")",
+      "Bash(node -e ' *)",
+      "Bash(start http://localhost:5173/)",
+      "Bash(taskkill /f /im node.exe)",
+      "Bash(git init *)"
+    ]
+  }
+}
