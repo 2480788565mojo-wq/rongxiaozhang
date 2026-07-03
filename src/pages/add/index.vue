@@ -46,7 +46,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue';
-import { addBill, getAccounts, type Account } from '@/utils/store';
+import { addBill, getAccounts, getAllCategories, type Account } from '@/utils/store';
 
 const formData = reactive({
 	type: 'expense' as 'expense' | 'income',
@@ -62,30 +62,12 @@ const showAccount = ref(false);
 const showDatePicker = ref(false);
 const dateValue = ref(Number(new Date()));
 const selectedCategory = ref('');
-const selectedCategoryName = ref('');
 
-// 分类数据
-const allCategories = {
-	expense: [
-		{ name: '餐饮美食', children: ['早餐','午餐','晚餐','外卖','水果零食','奶茶饮品','聚餐宴请'] },
-		{ name: '交通出行', children: ['公交地铁','打车','加油','停车费','过路费','火车/飞机','共享单车'] },
-		{ name: '购物消费', children: ['服装鞋包','美妆护肤','家居日用','数码电器','文具书籍','宠物用品'] },
-		{ name: '居住物业', children: ['房租/房贷','水费','电费','燃气费','物业费','维修','网络宽带'] },
-		{ name: '休闲娱乐', children: ['电影演出','运动健身','游戏充值','旅游度假','KTV/酒吧'] },
-		{ name: '人情社交', children: ['红包礼金','孝敬父母','送礼','聚会请客'] },
-		{ name: '医疗健康', children: ['看病挂号','药品','体检','牙科/眼科','保健'] },
-		{ name: '教育学习', children: ['课程培训','考证报名','书籍','文具'] },
-		{ name: '通讯', children: ['话费','流量套餐'] },
-	],
-	income: [
-		{ name: '工资收入', children: ['工资','奖金','补贴'] },
-		{ name: '副业收入', children: ['兼职','投资理财','红包收入'] },
-		{ name: '其他收入', children: ['退款','闲置出售','其他'] },
-	],
-};
+// 分类数据 — 合并预置 + 自定义
+const categoryData = computed(() => getAllCategories(formData.type));
 
 const categoryColumns = computed(() => {
-	const cats = allCategories[formData.type] || [];
+	const cats = categoryData.value;
 	return [cats.map(c => ({
 		name: c.name,
 		children: c.children.map(ch => ({ name: ch })),
@@ -154,7 +136,6 @@ function saveBill() {
 	setTimeout(() => uni.navigateBack(), 800);
 }
 
-// 页面显示时刷新账户列表
 import { onShow } from '@dcloudio/uni-app';
 onShow(() => {
 	loadAccounts();

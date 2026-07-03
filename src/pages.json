@@ -47,6 +47,12 @@
 			"style": {
 				"navigationBarTitleText": "设置"
 			}
+		},
+		{
+			"path": "pages/categories/index",
+			"style": {
+				"navigationBarTitleText": "分类管理"
+			}
 		}
 	],
 	"globalStyle": {

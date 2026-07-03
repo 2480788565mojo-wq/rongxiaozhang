@@ -60,6 +60,7 @@
 				<text>还没有记录，点击下方 + 开始记账吧</text>
 			</view>
 		</view>
+		<FabBtn />
 	</view>
 </template>
 

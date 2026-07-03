@@ -45,6 +45,7 @@
 			</view>
 			<view class="empty-tip" v-if="top5.length === 0"><text>本月暂无支出</text></view>
 		</view>
+		<FabBtn />
 	</view>
 </template>
 

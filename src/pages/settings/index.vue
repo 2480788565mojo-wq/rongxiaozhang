@@ -15,6 +15,10 @@
 				<text class="item-label">💾 导出备份（JSON）</text>
 				<text class="arrow">></text>
 			</view>
+			<view class="settings-item" @click="goCategories">
+				<text class="item-label">📂 分类管理</text>
+				<text class="arrow">></text>
+			</view>
 			<view class="settings-item" @click="goAccounts">
 				<text class="item-label">🏦 账户管理</text>
 				<text class="arrow">></text>
@@ -40,6 +44,7 @@
 			@confirm="clearAllData"
 			@cancel="showClearConfirm = false"
 		></u-modal>
+		<FabBtn />
 	</view>
 </template>
 
@@ -48,6 +53,10 @@ import { ref } from 'vue';
 import { getBills, exportCSV, exportAllData, clearAllLocalData } from '@/utils/store';
 
 const showClearConfirm = ref(false);
+
+function goCategories() {
+	uni.navigateTo({ url: '/pages/categories/index' });
+}
 
 function goExport() {
 	const bills = getBills();

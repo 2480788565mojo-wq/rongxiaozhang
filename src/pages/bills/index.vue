@@ -31,6 +31,7 @@
 		<view class="empty-state" v-if="billGroups.length === 0">
 			<text class="empty-text">暂无账单记录</text>
 		</view>
+		<FabBtn />
 	</view>
 </template>
 
