@@ -234,6 +234,7 @@ export function clearAllLocalData() {
 		uni.removeStorageSync(KEYS.bills);
 		uni.removeStorageSync(KEYS.accounts);
 		uni.removeStorageSync(KEYS.budgets);
+			uni.removeStorageSync(KEYS.categories);
 	} catch {}
 }
 

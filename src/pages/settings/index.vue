@@ -1,7 +1,7 @@
 <template>
 	<view class="page-settings">
 		<view class="user-card">
-			<image class="avatar" src="/static/logo.jpg" mode="aspectFill"></image>
+			<image class="avatar" src="/images/logo.jpg" mode="aspectFill"></image>
 			<text class="nickname">荣小账</text>
 			<text class="desc">记录每一笔，心中有数</text>
 		</view>
@@ -13,6 +13,10 @@
 			</view>
 			<view class="settings-item" @click="exportBackup">
 				<text class="item-label">💾 导出备份（JSON）</text>
+				<text class="arrow">></text>
+			</view>
+			<view class="settings-item" @click="goSnake">
+				<text class="item-label">🐍 小游戏</text>
 				<text class="arrow">></text>
 			</view>
 			<view class="settings-item" @click="goCategories">
@@ -50,12 +54,17 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import FabBtn from '@/components/FabBtn.vue';
 import { getBills, exportCSV, exportAllData, clearAllLocalData } from '@/utils/store';
 
 const showClearConfirm = ref(false);
 
 function goCategories() {
 	uni.navigateTo({ url: '/pages/categories/index' });
+}
+
+function goSnake() {
+	uni.navigateTo({ url: '/pages/snake/index' });
 }
 
 function goExport() {

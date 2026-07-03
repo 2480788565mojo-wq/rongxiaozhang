@@ -7,15 +7,15 @@
 			<view class="summary-row">
 				<view class="summary-item">
 					<text class="label">支出</text>
-					<text class="amount expense">¥{{ monthlyStats.expense }}</text>
+					<text class="amount expense">¥{{ monthlyStats.expense.toFixed(2) }}</text>
 				</view>
 				<view class="summary-item">
 					<text class="label">收入</text>
-					<text class="amount income">¥{{ monthlyStats.income }}</text>
+					<text class="amount income">¥{{ monthlyStats.income.toFixed(2) }}</text>
 				</view>
 				<view class="summary-item">
 					<text class="label">结余</text>
-					<text class="amount">¥{{ monthlyStats.balance }}</text>
+					<text class="amount">¥{{ monthlyStats.balance.toFixed(2) }}</text>
 				</view>
 			</view>
 		</view>
@@ -68,6 +68,7 @@
 import { ref, computed } from 'vue';
 import { getRecentBills, getMonthlyStats, getBudget, getBills, type Bill } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
+import FabBtn from '@/components/FabBtn.vue';
 
 const now = new Date();
 const year = now.getFullYear();

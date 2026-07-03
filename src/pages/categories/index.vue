@@ -219,7 +219,8 @@ function showSubInput(parent: CatItem) {
 function confirmAddSub() {
 	const name = addSubName.value.trim();
 	if (!name) { uni.showToast({ title: '请输入名称', icon: 'none' }); return; }
-	const type = expenseList.value.some(e => e.key === subParentName.value) ? 'expense' : 'income';
+	const inExpense = expenseList.value.some(e => e.name === subParentName.value);
+		const type = inExpense ? 'expense' : 'income';
 	const r = addCustomCategory(type, subParentName.value, name);
 	if (!r) { uni.showToast({ title: '名称已存在或冲突', icon: 'none' }); return; }
 	uni.showToast({ title: '添加成功', icon: 'success' });

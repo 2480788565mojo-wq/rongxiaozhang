@@ -12,7 +12,7 @@
 			</view>
 
 			<view class="form-list">
-				<view class="form-item" @click="showCategory = true">
+				<view class="form-item" @click="selectParent">
 					<text class="form-label">分类</text>
 					<text class="form-value">{{ selectedCategory || '请选择' }}</text>
 					<text class="arrow">></text>
@@ -22,11 +22,13 @@
 					<text class="form-value">{{ formData.account || '请选择' }}</text>
 					<text class="arrow">></text>
 				</view>
-				<view class="form-item" @click="showDatePicker = true">
-					<text class="form-label">日期</text>
-					<text class="form-value">{{ formData.date }}</text>
-					<text class="arrow">></text>
-				</view>
+				<picker mode="date" :value="formData.date" @change="onDateChange">
+					<view class="form-item" style="border-bottom: none;">
+						<text class="form-label">日期</text>
+						<text class="form-value">{{ formData.date }}</text>
+						<text class="arrow">></text>
+					</view>
+				</picker>
 				<view class="form-item">
 					<text class="form-label">备注</text>
 					<input type="text" v-model="formData.note" placeholder="选填" class="note-input" />
@@ -38,15 +40,14 @@
 			<u-button type="primary" size="large" shape="circle" @click="saveBill">保存</u-button>
 		</view>
 
-		<u-picker :show="showCategory" :columns="categoryColumns" @confirm="onCategoryConfirm" @cancel="showCategory = false" keyName="name"></u-picker>
 		<u-picker :show="showAccount" :columns="[accountList]" @confirm="onAccountConfirm" @cancel="showAccount = false" keyName="name"></u-picker>
-		<u-datetime-picker :show="showDatePicker" v-model="dateValue" mode="date" @confirm="onDateConfirm" @cancel="showDatePicker = false"></u-datetime-picker>
 	</view>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue';
-import { addBill, getAccounts, getAllCategories, type Account } from '@/utils/store';
+import { addBill, getAccounts, getAllCategories, getBills, updateBill, type Account, type Bill } from '@/utils/store';
+import { onShow } from '@dcloudio/uni-app';
 
 const formData = reactive({
 	type: 'expense' as 'expense' | 'income',
@@ -57,22 +58,35 @@ const formData = reactive({
 	note: '',
 });
 
-const showCategory = ref(false);
 const showAccount = ref(false);
-const showDatePicker = ref(false);
-const dateValue = ref(Number(new Date()));
 const selectedCategory = ref('');
+const currentParents = ref<{name: string; children: string[]}[]>([]);
 
-// 分类数据 — 合并预置 + 自定义
-const categoryData = computed(() => getAllCategories(formData.type));
+function selectParent() {
+	const all = getAllCategories(formData.type);
+	currentParents.value = all.map(c => ({ name: c.name, children: c.children }));
+	const names = all.map(c => c.name);
+	uni.showActionSheet({
+		itemList: names,
+		success: (res) => {
+			const parent = currentParents.value[res.tapIndex];
+			if (parent && parent.children.length > 0) {
+				selectChild(parent.name, parent.children);
+			}
+		}
+	});
+}
 
-const categoryColumns = computed(() => {
-	const cats = categoryData.value;
-	return [cats.map(c => ({
-		name: c.name,
-		children: c.children.map(ch => ({ name: ch })),
-	}))];
-});
+function selectChild(parentName: string, children: string[]) {
+	uni.showActionSheet({
+		itemList: children,
+		success: (res) => {
+			const child = children[res.tapIndex];
+			selectedCategory.value = parentName + ' › ' + child;
+			formData.category = child;
+		}
+	});
+}
 
 const accountList = ref<{name: string}[]>([]);
 
@@ -80,22 +94,10 @@ function loadAccounts() {
 	accountList.value = getAccounts().map(a => ({ name: a.name }));
 }
 
-switchType('expense');
-
 function switchType(type: 'expense' | 'income') {
 	formData.type = type;
 	selectedCategory.value = '';
 	formData.category = '';
-}
-
-function onCategoryConfirm(e: any) {
-	const first = e.value[0];
-	const second = e.value[1];
-	if (second) {
-		selectedCategory.value = `${first.name} › ${second.name}`;
-		formData.category = second.name;
-	}
-	showCategory.value = false;
 }
 
 function onAccountConfirm(e: any) {
@@ -103,9 +105,8 @@ function onAccountConfirm(e: any) {
 	showAccount.value = false;
 }
 
-function onDateConfirm(e: any) {
-	formData.date = e.value?.slice(0, 10) || '';
-	showDatePicker.value = false;
+function onDateChange(e: any) {
+	formData.date = (e.detail.value || '').slice(0, 10);
 }
 
 function saveBill() {
@@ -122,7 +123,7 @@ function saveBill() {
 		return;
 	}
 
-	addBill({
+	const billData = {
 		type: formData.type,
 		amount: parseFloat(parseFloat(formData.amount).toFixed(2)),
 		category: formData.category,
@@ -130,16 +131,46 @@ function saveBill() {
 		account: formData.account,
 		note: formData.note,
 		date: formData.date,
-	});
+	};
 
-	uni.showToast({ title: '保存成功', icon: 'success' });
+	if (editId.value) {
+		updateBill(editId.value, billData);
+	} else {
+		addBill(billData);
+	}
+
+	uni.showToast({ title: editId.value ? '更新成功' : '保存成功', icon: 'success' });
 	setTimeout(() => uni.navigateBack(), 800);
 }
 
-import { onShow } from '@dcloudio/uni-app';
+const editId = ref('');
+
 onShow(() => {
 	loadAccounts();
+	// 检查是否有编辑的账单ID
+	const pages = getCurrentPages();
+	const page = pages[pages.length - 1];
+	if (page?.options?.id) {
+		editId.value = page.options.id;
+		const bills = getBills();
+		const bill = bills.find(b => b._id === editId.value);
+		if (bill) {
+			formData.type = bill.type;
+			formData.amount = String(bill.amount);
+			formData.category = bill.category;
+			formData.account = bill.account;
+			formData.date = bill.date;
+			formData.note = bill.note;
+			const path = bill.categoryPath || [];
+			if (path.length >= 2) {
+				selectedCategory.value = path[0] + ' › ' + path[1];
+			} else if (bill.category) {
+				selectedCategory.value = bill.category;
+			}
+		}
+	}
 });
+switchType('expense');
 loadAccounts();
 </script>
 

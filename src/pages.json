@@ -53,6 +53,12 @@
 			"style": {
 				"navigationBarTitleText": "分类管理"
 			}
+		},
+		{
+			"path": "pages/snake/index",
+			"style": {
+				"navigationBarTitleText": "贪吃蛇"
+			}
 		}
 	],
 	"globalStyle": {

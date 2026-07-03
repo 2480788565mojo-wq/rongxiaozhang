@@ -2,10 +2,12 @@
 	<view class="page-stats">
 		<view class="header">
 			<text class="title">统计报表</text>
-			<view class="month-select" @click="showMonthPicker = true">
+			<picker mode="date" fields="month" :value="selYear + '-' + String(selMonth).padStart(2, '0')" @change="onMonthChange">
+			<view class="month-select">
 				<text>{{ currentMonth }}</text>
 				<text class="arrow">▼</text>
 			</view>
+			</picker>
 		</view>
 
 		<view class="stats-summary">
@@ -53,6 +55,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { getBillsByMonth, getMonthlyStats, getCategoryStats, getTrendData, type Bill } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
+import FabBtn from '@/components/FabBtn.vue';
 
 const now = new Date();
 const selYear = ref(now.getFullYear());
@@ -107,8 +110,8 @@ function drawCharts() {
 
 function drawTrend() {
 	const ctx = uni.createCanvasContext('trendCanvas');
-	const w = 310, h = 260;
-	const pad = { top: 40, bottom: 30, left: 45, right: 25 };
+	const w = 345, h = 330;
+	const pad = { top: 45, bottom: 30, left: 50, right: 30 };
 	const cw = w - pad.left - pad.right;
 	const ch = h - pad.top - pad.bottom;
 
@@ -164,13 +167,13 @@ function drawPie() {
 	if (catStats.length === 0) {
 		ctx.setFontSize(14);
 		ctx.setFillStyle('#ccc');
-		ctx.fillText('暂无数据', 120, 130);
+		ctx.fillText('暂无数据', 140, 150);
 		ctx.draw();
 		return;
 	}
 
 	const total = catStats.reduce((s, d) => s + d.amount, 0);
-	const cx = 110, cy = 130, r = 80;
+	const cx = 130, cy = 150, r = 100;
 	let start = -Math.PI / 2;
 
 	catStats.forEach((d, i) => {
@@ -184,16 +187,16 @@ function drawPie() {
 		start += angle;
 	});
 
-	let ly = 20;
+	let ly = 10;
 	const show = catStats.slice(0, 6);
 	show.forEach((d, i) => {
 		ctx.setFillStyle(colors[i % colors.length]);
-		ctx.fillRect(210, ly, 12, 12);
+		ctx.fillRect(280, ly, 12, 12);
 		ctx.setFontSize(10);
 		ctx.setFillStyle('#333');
-		ctx.fillText(d.name, 226, ly + 10);
+		ctx.fillText(d.name, 296, ly + 10);
 		ctx.setFillStyle('#999');
-		ctx.fillText(Math.round((d.amount / total) * 100) + '%', 226, ly + 24);
+		ctx.fillText(Math.round((d.amount / total) * 100) + '%', 296, ly + 24);
 		ly += 42;
 	});
 
@@ -226,7 +229,7 @@ loadData();
 	margin-bottom: 20rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
 }
 .chart-title { font-size: 28rpx; font-weight: bold; display: block; margin-bottom: 20rpx; }
-.chart-canvas { width: 620rpx; height: 520rpx; }
+.chart-canvas { width: 690rpx; height: 600rpx; }
 
 .top-item { display: flex; align-items: center; margin-bottom: 16rpx; }
 .top-rank {

@@ -1,10 +1,12 @@
 <template>
 	<view class="page-bills">
 		<view class="filter-bar">
-			<view class="month-selector" @click="showMonthPicker = true">
+			<picker mode="date" fields="month" :value="selYear + '-' + String(selMonth).padStart(2, '0')" @change="onMonthChange">
+			<view class="month-selector">
 				<text>{{ currentMonth }}</text>
 				<text class="arrow">▼</text>
 			</view>
+			</picker>
 			<view class="total-summary">
 				<text>支出 ¥{{ totalExpense.toFixed(2) }}</text>
 				<text class="income"> 收入 ¥{{ totalIncome.toFixed(2) }}</text>
@@ -39,6 +41,7 @@
 import { ref, computed } from 'vue';
 import { getBillsByMonth, type Bill } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
+import FabBtn from '@/components/FabBtn.vue';
 
 const now = new Date();
 const selYear = ref(now.getFullYear());

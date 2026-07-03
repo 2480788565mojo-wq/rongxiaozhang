@@ -62,7 +62,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { getBudget, saveBudget, getMonthlyStats, getCategoryStats } from '@/utils/store';
+import { getBudget, saveBudget, getMonthlyStats, getCategoryStats, getAllCategories } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
 
 const now = new Date();
@@ -86,10 +86,6 @@ const showEditCat = ref(false);
 const editingCatName = ref('');
 const editCatBudget = ref('');
 
-const categoryNames = [
-	'餐饮美食','交通出行','购物消费','居住物业',
-	'休闲娱乐','人情社交','医疗健康','教育学习','通讯',
-];
 
 function loadBudget() {
 	const stats = getMonthlyStats(year, month);
@@ -130,10 +126,11 @@ function onSetTotal() {
 }
 
 function showAddCategory() {
+	const cats = getAllCategories('expense').map(c => c.name);
 	uni.showActionSheet({
-		itemList: categoryNames,
+		itemList: cats,
 		success: (res) => {
-			const name = categoryNames[res.tapIndex];
+			const name = cats[res.tapIndex];
 			if (name) {
 				editingCatName.value = name;
 				editCatBudget.value = '';
