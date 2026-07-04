@@ -27,12 +27,12 @@
 
 		<view class="chart-card">
 			<text class="chart-title">月度收支趋势</text>
-			<canvas canvas-id="trendCanvas" class="chart-canvas"></canvas>
+			<canvas canvas-id="trendCanvas" id="trendCanvas" class="chart-canvas"></canvas>
 		</view>
 
 		<view class="chart-card">
 			<text class="chart-title">支出分类占比</text>
-			<canvas canvas-id="pieCanvas" class="chart-canvas"></canvas>
+			<canvas canvas-id="pieCanvas" id="pieCanvas" class="chart-canvas"></canvas>
 		</view>
 
 		<view class="top5-card">
@@ -52,8 +52,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue';
-import { getBillsByMonth, getMonthlyStats, getCategoryStats, getTrendData, type Bill } from '@/utils/store';
+import { ref, computed, nextTick } from 'vue';
+import { getMonthlyStats, getCategoryStats, getTrendData } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
 import FabBtn from '@/components/FabBtn.vue';
 
@@ -74,7 +74,6 @@ function loadData() {
 	totalExpense.value = stats.expense;
 	totalIncome.value = stats.income;
 
-	// 环比
 	let lastM = selMonth.value - 1;
 	let lastY = selYear.value;
 	if (lastM === 0) { lastM = 12; lastY--; }
@@ -87,7 +86,6 @@ function loadData() {
 		compareColor.value = diff > 0 ? 'expense' : 'income';
 	}
 
-	// TOP5
 	const catStats = getCategoryStats(selYear.value, selMonth.value);
 	if (catStats.length > 0) {
 		const maxAmount = catStats[0].amount;
@@ -100,18 +98,29 @@ function loadData() {
 		top5.value = [];
 	}
 
-	nextTick(() => drawCharts());
+	nextTick(() => resizeAndDraw());
 }
 
-function drawCharts() {
+function resizeAndDraw() {
+	['trendCanvas', 'pieCanvas'].forEach((id) => {
+		const canvas = document.querySelector('[canvas-id="' + id + '"]') as HTMLCanvasElement | null;
+		if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+			canvas.width = canvas.clientWidth;
+			canvas.height = canvas.clientHeight;
+		}
+	});
 	drawTrend();
 	drawPie();
 }
 
 function drawTrend() {
+	const canvas = document.querySelector('[canvas-id="trendCanvas"]') as HTMLCanvasElement | null;
+	if (!canvas) return;
 	const ctx = uni.createCanvasContext('trendCanvas');
-	const w = 345, h = 330;
-	const pad = { top: 45, bottom: 30, left: 50, right: 30 };
+
+	const w = canvas.width;
+	const h = canvas.height;
+	const pad = { top: 40, bottom: 30, left: 45, right: 25 };
 	const cw = w - pad.left - pad.right;
 	const ch = h - pad.top - pad.bottom;
 
@@ -125,7 +134,7 @@ function drawTrend() {
 		ctx.beginPath();
 		ctx.moveTo(pad.left, y);
 		ctx.lineTo(w - pad.right, y);
-		ctx.setStrokeStyle('#eee');
+		ctx.setStrokeStyle('#ddd');
 		ctx.setLineWidth(1);
 		ctx.stroke();
 		ctx.setFontSize(10);
@@ -136,44 +145,70 @@ function drawTrend() {
 	function drawLine(vals: number[], color: string) {
 		ctx.beginPath();
 		ctx.setStrokeStyle(color);
-		ctx.setLineWidth(2);
+		ctx.setLineWidth(3);
 		vals.forEach((v, i) => {
 			const x = pad.left + (cw / (data.length - 1 || 1)) * i;
 			const y = pad.top + ch - (v / ceiling) * ch;
 			i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
 		});
 		ctx.stroke();
+
+		vals.forEach((v, i) => {
+			const x = pad.left + (cw / (data.length - 1 || 1)) * i;
+			const y = pad.top + ch - (v / ceiling) * ch;
+			ctx.beginPath();
+			ctx.arc(x, y, 4, 0, Math.PI * 2);
+			ctx.setFillStyle(color);
+			ctx.fill();
+			ctx.beginPath();
+			ctx.arc(x, y, 2, 0, Math.PI * 2);
+			ctx.setFillStyle('#fff');
+			ctx.fill();
+		});
 	}
 
-	drawLine(data.map(d => d.expense), '#2979ff');
-	drawLine(data.map(d => d.income), '#4cd964');
+	drawLine(data.map(d => d.expense), '#1a5cc8');
+	drawLine(data.map(d => d.income), '#2e8b57');
 
-	ctx.setFillStyle('#2979ff');
-	ctx.fillRect(w - 80, 8, 12, 12);
-	ctx.setFillStyle('#333');
 	ctx.setFontSize(10);
-	ctx.fillText('支出', w - 64, 18);
-	ctx.setFillStyle('#4cd964');
-	ctx.fillRect(w - 30, 8, 12, 12);
-	ctx.fillText('收入', w - 14, 18);
+	ctx.setFillStyle('#666');
+	data.forEach((d, i) => {
+		const x = pad.left + (cw / (data.length - 1 || 1)) * i;
+		ctx.fillText(d.month, x - 8, pad.top + ch + 16);
+	});
+
+	ctx.setFillStyle('#1a5cc8');
+	ctx.fillRect(w - 90, 10, 14, 14);
+	ctx.setFillStyle('#333');
+	ctx.setFontSize(11);
+	ctx.fillText('支出', w - 72, 22);
+	ctx.setFillStyle('#2e8b57');
+	ctx.fillRect(w - 35, 10, 14, 14);
+	ctx.fillText('收入', w - 17, 22);
+
 	ctx.draw();
 }
 
 function drawPie() {
+	const canvas = document.querySelector('[canvas-id="pieCanvas"]') as HTMLCanvasElement | null;
+	if (!canvas) return;
 	const ctx = uni.createCanvasContext('pieCanvas');
+
+	const w = canvas.width;
+	const h = canvas.height;
 	const catStats = getCategoryStats(selYear.value, selMonth.value);
 	const colors = ['#2979ff','#5b8ff9','#f0ad4e','#4cd964','#dd524d','#b0bec5','#9c27b0','#ff7043','#26a69a','#78909c'];
 
 	if (catStats.length === 0) {
 		ctx.setFontSize(14);
 		ctx.setFillStyle('#ccc');
-		ctx.fillText('暂无数据', 140, 150);
+		ctx.fillText('暂无数据', w / 2 - 30, h / 2);
 		ctx.draw();
 		return;
 	}
 
 	const total = catStats.reduce((s, d) => s + d.amount, 0);
-	const cx = 130, cy = 150, r = 100;
+	const cx = w * 0.3, cy = h / 2, r = Math.min(w, h) * 0.3;
 	let start = -Math.PI / 2;
 
 	catStats.forEach((d, i) => {
@@ -187,17 +222,18 @@ function drawPie() {
 		start += angle;
 	});
 
-	let ly = 10;
+	const lx = w * 0.65;
+	let ly = 15;
 	const show = catStats.slice(0, 6);
 	show.forEach((d, i) => {
 		ctx.setFillStyle(colors[i % colors.length]);
-		ctx.fillRect(280, ly, 12, 12);
-		ctx.setFontSize(10);
+		ctx.fillRect(lx, ly, 14, 14);
+		ctx.setFontSize(11);
 		ctx.setFillStyle('#333');
-		ctx.fillText(d.name, 296, ly + 10);
+		ctx.fillText(d.name, lx + 18, ly + 12);
 		ctx.setFillStyle('#999');
-		ctx.fillText(Math.round((d.amount / total) * 100) + '%', 296, ly + 24);
-		ly += 42;
+		ctx.fillText(Math.round((d.amount / total) * 100) + '%', lx + 18, ly + 26);
+		ly += 48;
 	});
 
 	ctx.draw();
@@ -229,7 +265,7 @@ loadData();
 	margin-bottom: 20rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
 }
 .chart-title { font-size: 28rpx; font-weight: bold; display: block; margin-bottom: 20rpx; }
-.chart-canvas { width: 690rpx; height: 600rpx; }
+.chart-canvas { width: 100%; height: 700rpx; }
 
 .top-item { display: flex; align-items: center; margin-bottom: 16rpx; }
 .top-rank {

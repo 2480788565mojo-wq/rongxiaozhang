@@ -1,4 +1,14 @@
 {
+  "skills": [
+    {
+      "name": "run-app",
+      "directory": ".claude/skills/run-app"
+    },
+    {
+      "name": "rebuild-app",
+      "directory": ".claude/skills/rebuild-app"
+    }
+  ],
   "permissions": {
     "allow": [
       "Bash(npm --version)",
@@ -14,7 +24,9 @@
       "Bash(node -e ' *)",
       "Bash(start http://localhost:5173/)",
       "Bash(taskkill /f /im node.exe)",
-      "Bash(git init *)"
+      "Bash(git init *)",
+      "Bash(npm run build:*)",
+      "Bash(ls dist/build/)"
     ]
   }
 }
