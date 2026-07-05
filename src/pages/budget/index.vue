@@ -1,5 +1,6 @@
 <template>
 	<view class="page-budget">
+		<!-- 月度总预算概览 -->
 		<view class="section">
 			<text class="section-title">每月总预算</text>
 			<view class="total-budget-card">
@@ -16,6 +17,7 @@
 					<text class="value" :class="{ danger: remainAmount < 0 }">¥{{ remainAmount.toFixed(2) }}</text>
 				</view>
 			</view>
+			<!-- 预算进度条，超支显示红色 -->
 			<u-line-progress
 				:percentage="usedPercent"
 				:activeColor="usedPercent > 100 ? '#dd524d' : usedPercent > 80 ? '#f0ad4e' : '#2979ff'"
@@ -26,6 +28,7 @@
 			</view>
 		</view>
 
+		<!-- 分类预算列表 -->
 		<view class="section">
 			<text class="section-title">分类预算</text>
 			<view class="category-item" v-for="(item, idx) in categoryBudgets" :key="idx">
@@ -53,8 +56,8 @@
 
 		<u-modal :show="showEditCat" title="设置分类预算" @confirm="onSetCategory" @cancel="showEditCat = false">
 			<view class="modal-form">
-				<text class="modal-label">当前分类：{{ editingCatName }}</text>
-				<input class="modal-input" type="digit" v-model="editCatBudget" placeholder="输入预算金额" />
+					<text class="modal-label">当前分类：{{ editingCatName }}</text>
+					<input class="modal-input" type="digit" v-model="editCatBudget" placeholder="输入预算金额" />
 			</view>
 		</u-modal>
 	</view>
@@ -86,7 +89,7 @@ const showEditCat = ref(false);
 const editingCatName = ref('');
 const editCatBudget = ref('');
 
-
+// 加载预算数据：读取已保存的预算，计算使用量和进度百分比
 function loadBudget() {
 	const stats = getMonthlyStats(year, month);
 	usedAmount.value = stats.expense;
@@ -110,6 +113,7 @@ function loadBudget() {
 	}
 }
 
+// 设置总预算，保存到本地存储
 function onSetTotal() {
 	const val = parseFloat(editTotal.value);
 	if (val > 0) {
@@ -125,6 +129,7 @@ function onSetTotal() {
 	showSetTotal.value = false;
 }
 
+// 弹出分类列表供用户选择，为选中的分类设置预算
 function showAddCategory() {
 	const cats = getAllCategories('expense').map(c => c.name);
 	uni.showActionSheet({
@@ -140,6 +145,7 @@ function showAddCategory() {
 	});
 }
 
+// 保存分类预算
 function onSetCategory() {
 	const val = parseFloat(editCatBudget.value);
 	if (editingCatName.value && val > 0) {

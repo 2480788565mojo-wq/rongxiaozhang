@@ -36,3 +36,6 @@ Desktop.ini
 # 环境变量
 .env
 .env.*
+
+# Claude Code check markers (runtime artifacts)
+.claude/.checks/

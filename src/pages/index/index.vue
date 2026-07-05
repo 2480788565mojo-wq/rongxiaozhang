@@ -1,5 +1,6 @@
 <template>
 	<view class="page-home">
+		<!-- 顶部收支摘要卡片 -->
 		<view class="header-card">
 			<view class="date-section">
 				<text class="month">{{ currentMonth }}</text>
@@ -20,6 +21,7 @@
 			</view>
 		</view>
 
+		<!-- 预算进度卡片 -->
 		<view class="budget-card" @click="goBudget">
 			<view class="card-header">
 				<text class="section-title">预算进度</text>
@@ -41,6 +43,7 @@
 			</view>
 		</view>
 
+		<!-- 最近5条账单记录 -->
 		<view class="recent-card">
 			<view class="card-header">
 				<text class="section-title">最近记录</text>
@@ -56,6 +59,7 @@
 					{{ item.type === 'expense' ? '-' : '+' }}¥{{ item.amount.toFixed(2) }}
 				</text>
 			</view>
+			<!-- 空数据提示 -->
 			<view class="empty-tip" v-if="recentBills.length === 0">
 				<text>还没有记录，点击下方 + 开始记账吧</text>
 			</view>
@@ -79,10 +83,12 @@ const monthlyStats = ref({ expense: 0, income: 0, balance: 0 });
 const recentBills = ref<Bill[]>([]);
 const budgetData = ref<{ total: number; used: number; percent: number } | null>(null);
 
+// 加载所有首页数据：月度统计、最近账单、预算进度
 function loadData() {
 	monthlyStats.value = getMonthlyStats(year, month);
 	recentBills.value = getRecentBills(5);
 
+	// 计算预算使用百分比
 	const budget = getBudget(year, month);
 	if (budget && budget.totalBudget > 0) {
 		const used = monthlyStats.value.expense;
@@ -97,6 +103,7 @@ function loadData() {
 	}
 }
 
+// 根据分类显示对应的 emoji 图标
 function getIcon(category: string): string {
 	const iconMap: Record<string, string> = {
 		'早餐':'🍜','午餐':'🍜','晚餐':'🍜','外卖':'🥡','水果零食':'🍎','奶茶饮品':'🧋','聚餐宴请':'🍽️',

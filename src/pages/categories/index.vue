@@ -1,9 +1,11 @@
 <template>
 	<view class="page-categories">
+		<!-- 提示：预置分类不可修改 -->
 		<view class="tip">
 			<text>预置分类不可修改，自定义分类可重命名和删除</text>
 		</view>
 
+		<!-- 支出分类列表 -->
 		<view class="cat-section">
 			<view class="section-header">
 				<text class="section-title">支出分类</text>
@@ -38,6 +40,7 @@
 			</view>
 		</view>
 
+		<!-- 收入分类列表 -->
 		<view class="cat-section">
 			<view class="section-header">
 				<text class="section-title">收入分类</text>
@@ -71,6 +74,7 @@
 				</view>
 			</view>
 		</view>
+
 		<u-modal :show="showAddModal" title="添加大类" @confirm="confirmAddTop" @cancel="showAddModal = false">
 			<view class="modal-form">
 				<view class="modal-field">
@@ -122,6 +126,7 @@ import {
 	deleteCustomCategory,
 } from '@/utils/store';
 
+// 分类树形结构：大类含子类列表
 interface CatChild {
 	key: string;
 	name: string;
@@ -153,6 +158,7 @@ const showDeleteModal = ref(false);
 const deleteTarget = ref<{ _id: string; name: string } | null>(null);
 const deleteTip = ref('');
 
+// 构建分类树：合并预置分类和自定义分类，形成 大类→子类 的树形结构
 function buildList(type: 'expense' | 'income'): CatItem[] {
 	const presets = getPresetCategories()[type];
 	const customs = getCustomCategories().filter(c => c.type === type);
@@ -176,6 +182,7 @@ function buildList(type: 'expense' | 'income'): CatItem[] {
 		result.push(item);
 	});
 
+	// 将自定义子类补充到对应的大类下
 	customs.filter(c => c.parentName !== '').forEach(cc => {
 		const p = result.find(r => r.name === cc.parentName);
 		if (p && !p.children.some(ch => ch.name === cc.name)) {
@@ -194,12 +201,14 @@ function loadData() {
 onShow(() => { loadData(); });
 loadData();
 
+// 弹出添加大类的对话框
 function showAddTop(type: 'expense' | 'income') {
 	addTopType.value = type;
 	addTopName.value = '';
 	showAddModal.value = true;
 }
 
+// 确认添加新大类
 function confirmAddTop() {
 	const name = addTopName.value.trim();
 	if (!name) { uni.showToast({ title: '请输入名称', icon: 'none' }); return; }
@@ -210,17 +219,19 @@ function confirmAddTop() {
 	loadData();
 }
 
+// 弹出添加子类的对话框
 function showSubInput(parent: CatItem) {
 	subParentName.value = parent.name;
 	addSubName.value = '';
 	showSubModal.value = true;
 }
 
+// 确认添加子分类
 function confirmAddSub() {
 	const name = addSubName.value.trim();
 	if (!name) { uni.showToast({ title: '请输入名称', icon: 'none' }); return; }
 	const inExpense = expenseList.value.some(e => e.name === subParentName.value);
-		const type = inExpense ? 'expense' : 'income';
+	const type = inExpense ? 'expense' : 'income';
 	const r = addCustomCategory(type, subParentName.value, name);
 	if (!r) { uni.showToast({ title: '名称已存在或冲突', icon: 'none' }); return; }
 	uni.showToast({ title: '添加成功', icon: 'success' });
@@ -228,12 +239,14 @@ function confirmAddSub() {
 	loadData();
 }
 
+// 弹出重命名对话框
 function showRename(item: CatItem | CatChild) {
 	renameTarget.value = { _id: item._id || '' };
 	renameName.value = item.name;
 	showRenameModal.value = true;
 }
 
+// 确认重命名
 function confirmRename() {
 	if (!renameTarget.value) return;
 	const name = renameName.value.trim();
@@ -245,6 +258,7 @@ function confirmRename() {
 	loadData();
 }
 
+// 弹出删除确认框
 function confirmDelete(item: CatItem | CatChild) {
 	if (!item._id) return;
 	deleteTarget.value = { _id: item._id, name: item.name };
@@ -252,6 +266,7 @@ function confirmDelete(item: CatItem | CatChild) {
 	showDeleteModal.value = true;
 }
 
+// 确认删除分类
 function doDelete() {
 	if (!deleteTarget.value) return;
 	deleteCustomCategory(deleteTarget.value._id);
@@ -311,4 +326,3 @@ function doDelete() {
 	padding: 12rpx 16rpx; width: 100%; box-sizing: border-box;
 }
 </style>
-

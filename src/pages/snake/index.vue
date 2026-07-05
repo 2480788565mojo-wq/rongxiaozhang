@@ -1,5 +1,6 @@
 <template>
 	<view class="page-snake">
+		<!-- 得分和最高分显示 -->
 		<view class="game-header">
 			<text class="score-label">得分</text>
 			<text class="score-value">{{ score }}</text>
@@ -7,8 +8,10 @@
 			<text class="best-value">{{ bestScore }}</text>
 		</view>
 
+		<!-- 游戏画布，支持触摸滑屏操作 -->
 		<view class="game-board" @touchstart="onTouchStart" @touchend="onTouchEnd">
 			<canvas canvas-id="snakeCanvas" class="snake-canvas"></canvas>
+			<!-- 未开始/游戏结束时的遮罩层 -->
 			<view class="overlay" v-if="gameState !== 'playing'">
 				<text class="overlay-title">{{ overlayTitle }}</text>
 				<text class="overlay-desc">{{ overlayDesc }}</text>
@@ -43,12 +46,14 @@ let nextDir = { x: 1, y: 0 };
 let timer: ReturnType<typeof setInterval> | null = null;
 let tx = 0, ty = 0;
 
+// 从本地存储读取最高分
 function loadBest() {
 	try {
 		const d = uni.getStorageSync('rzz_snake_best');
 		if (d) bestScore.value = parseInt(d) || 0;
 	} catch {}
 }
+// 保存最高分到本地存储
 function saveBest() {
 	uni.setStorageSync('rzz_snake_best', String(bestScore.value));
 }
@@ -57,6 +62,7 @@ const overlayTitle = ref('');
 const overlayDesc = ref('');
 const overlayBtn = ref('');
 
+// 开始新游戏：初始化蛇的位置、方向，生成食物，启动定时器
 function startGame() {
 	gameState.value = 'playing';
 	score.value = 0;
@@ -69,6 +75,7 @@ function startGame() {
 	timer = setInterval(tick, MOVE_INTERVAL);
 }
 
+// 随机生成食物（避开蛇身）
 function spawnFood() {
 	for (let i = 0; i < 200; i++) {
 		const fx = Math.floor(Math.random() * GRID_SIZE);
@@ -83,12 +90,14 @@ function stopTimer() {
 	if (timer) { clearInterval(timer); timer = null; }
 }
 
+// 游戏主循环：蛇移动、碰撞检测、吃食物
 function tick() {
 	if (gameState.value !== 'playing') return;
 	dir = { ...nextDir };
 	const head = snake[0];
 	const nh: Point = { x: head.x + dir.x, y: head.y + dir.y };
 
+	// 撞墙或撞自己则游戏结束
 	if (nh.x < 0 || nh.x >= GRID_SIZE || nh.y < 0 || nh.y >= GRID_SIZE) { endGame(); return; }
 	if (snake.some(s => s.x === nh.x && s.y === nh.y)) { endGame(); return; }
 
@@ -102,6 +111,7 @@ function tick() {
 	draw();
 }
 
+// 游戏结束：停止定时器，更新最高分，显示结算界面
 function endGame() {
 	gameState.value = 'over';
 	stopTimer();
@@ -115,12 +125,15 @@ function endGame() {
 	overlayBtn.value = '重新开始';
 }
 
+// 绘制游戏画面：网格背景、蛇身、食物
 function draw() {
 	const ctx = uni.createCanvasContext('snakeCanvas');
 	const s = GRID_SIZE * CELL_SIZE;
+	// 深色背景
 	ctx.setFillStyle('#1a1a2e');
 	ctx.fillRect(0, 0, s, s);
 
+	// 网格线
 	ctx.setStrokeStyle('#16213e');
 	ctx.setLineWidth(0.5);
 	for (let i = 0; i <= GRID_SIZE; i++) {
@@ -128,12 +141,14 @@ function draw() {
 		ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(s, i * CELL_SIZE); ctx.stroke();
 	}
 
+	// 蛇身：蛇头亮绿色，蛇尾渐淡
 	snake.forEach((seg, i) => {
 		const a = 1 - (i / snake.length) * 0.5;
 		ctx.setFillStyle(i === 0 ? '#4cd964' : `rgba(76,217,100,${a})`);
 		ctx.fillRect(seg.x * CELL_SIZE + 1, seg.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
 	});
 
+	// 蛇眼睛
 	if (snake.length > 0) {
 		const h = snake[0];
 		ctx.setFillStyle('#fff');
@@ -142,6 +157,7 @@ function draw() {
 		ctx.fillRect(ex, ey, 4, 4);
 	}
 
+	// 食物：红色圆形带高光
 	ctx.setFillStyle('#ff6b6b');
 	ctx.beginPath();
 	ctx.arc(food.x * CELL_SIZE + 10, food.y * CELL_SIZE + 10, 8, 0, Math.PI * 2);
@@ -154,16 +170,19 @@ function draw() {
 	ctx.draw();
 }
 
+// 设置移动方向（不允许直接反向）
 function setDir(d: Point) {
 	if (d.x + dir.x === 0 && d.y + dir.y === 0) return;
 	nextDir = d;
 }
 
+// 触摸开始，记录起始位置
 function onTouchStart(e: any) {
 	const t = e.touches[0];
 	tx = t.clientX; ty = t.clientY;
 }
 
+// 触摸结束，根据滑动方向判断移动方向
 function onTouchEnd(e: any) {
 	if (gameState.value !== 'playing') return;
 	const t = e.changedTouches[0];
@@ -177,6 +196,7 @@ function onTouchEnd(e: any) {
 	}
 }
 
+// 键盘控制（H5 环境）：方向键和 WASD
 function onKeyDown(e: any) {
 	if (gameState.value !== 'playing') return;
 	switch (e.keyCode) {
@@ -201,6 +221,7 @@ function teardownKeyboard() {
 onMounted(() => { setupKeyboard(); });
 onUnmounted(() => { stopTimer(); teardownKeyboard(); });
 
+// 页面显示时加载最高分，未开始时显示开始界面
 onShow(() => {
 	loadBest();
 	if (gameState.value === 'idle') {

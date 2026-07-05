@@ -1,10 +1,12 @@
 <template>
 	<view class="page-accounts">
+		<!-- 总资产卡片 -->
 		<view class="total-card">
 			<text class="total-label">总资产</text>
 			<text class="total-amount">¥{{ totalBalance.toFixed(2) }}</text>
 		</view>
 
+		<!-- 账户列表 -->
 		<view class="account-list">
 			<view class="account-item" v-for="item in accounts" :key="item._id" @click="editAccount(item)">
 				<view class="account-icon">{{ getIcon(item.name) }}</view>
@@ -16,6 +18,7 @@
 			</view>
 		</view>
 
+		<!-- 添加账户按钮 -->
 		<view class="btn-add">
 			<u-button type="primary" shape="circle" @click="showAddModal = true">添加账户</u-button>
 		</view>
@@ -35,15 +38,18 @@ import { getAccounts, addAccount, deleteAccount, type Account } from '@/utils/st
 import { onShow } from '@dcloudio/uni-app';
 
 const accounts = ref<Account[]>([]);
+// 总资产 = 所有账户余额之和
 const totalBalance = computed(() => accounts.value.reduce((s, a) => s + a.balance, 0));
 const showAddModal = ref(false);
 const newName = ref('');
 const newBalance = ref('');
 
+// 从本地存储加载账户列表
 function loadAccounts() {
 	accounts.value = getAccounts();
 }
 
+// 根据账户名称显示对应的 emoji 图标
 function getIcon(name: string): string {
 	const m: Record<string, string> = {
 		'微信钱包':'💳','支付宝':'💳','银行卡':'🏦','现金':'💵',
@@ -51,6 +57,7 @@ function getIcon(name: string): string {
 	return Object.keys(m).find(k => name.includes(k)) ? m[Object.keys(m).find(k => name.includes(k))!] : '💰';
 }
 
+// 添加新账户
 function onAddAccount() {
 	if (newName.value.trim()) {
 		addAccount(newName.value.trim(), parseFloat(newBalance.value) || 0);
@@ -61,6 +68,7 @@ function onAddAccount() {
 	showAddModal.value = false;
 }
 
+// 长按/点击账户弹出操作菜单（目前支持删除）
 function editAccount(item: Account) {
 	uni.showActionSheet({
 		itemList: ['删除账户'],

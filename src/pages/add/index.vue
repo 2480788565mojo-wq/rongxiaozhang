@@ -1,27 +1,32 @@
 <template>
 	<view class="page-add">
 		<view class="form-section">
+			<!-- 收支类型切换：支出 / 收入 -->
 			<view class="type-switch">
 				<view class="type-btn" :class="{ active: formData.type === 'expense' }" @click="switchType('expense')">支出</view>
 				<view class="type-btn" :class="{ active: formData.type === 'income' }" @click="switchType('income')">收入</view>
 			</view>
 
+			<!-- 金额输入框 -->
 			<view class="amount-input">
 				<text class="currency">¥</text>
 				<input type="digit" v-model="formData.amount" placeholder="0.00" class="amount-field" />
 			</view>
 
 			<view class="form-list">
+				<!-- 选择分类：先选大类再选子类 -->
 				<view class="form-item" @click="selectParent">
 					<text class="form-label">分类</text>
 					<text class="form-value">{{ selectedCategory || '请选择' }}</text>
 					<text class="arrow">></text>
 				</view>
+				<!-- 选择账户 -->
 				<view class="form-item" @click="showAccount = true">
 					<text class="form-label">账户</text>
 					<text class="form-value">{{ formData.account || '请选择' }}</text>
 					<text class="arrow">></text>
 				</view>
+				<!-- 选择日期，默认今天 -->
 				<picker mode="date" :value="formData.date" @change="onDateChange">
 					<view class="form-item" style="border-bottom: none;">
 						<text class="form-label">日期</text>
@@ -29,6 +34,7 @@
 						<text class="arrow">></text>
 					</view>
 				</picker>
+				<!-- 备注，选填 -->
 				<view class="form-item">
 					<text class="form-label">备注</text>
 					<input type="text" v-model="formData.note" placeholder="选填" class="note-input" />
@@ -45,10 +51,12 @@
 </template>
 
 <script setup lang="ts">
+// 导入 Vue 响应式 API 和项目数据操作函数
 import { ref, reactive, computed } from 'vue';
 import { addBill, getAccounts, getAllCategories, getBills, updateBill, type Account, type Bill } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
 
+// 表单数据：类型（支出/收入）、金额、分类、账户、日期、备注
 const formData = reactive({
 	type: 'expense' as 'expense' | 'income',
 	amount: '',
@@ -62,6 +70,7 @@ const showAccount = ref(false);
 const selectedCategory = ref('');
 const currentParents = ref<{name: string; children: string[]}[]>([]);
 
+// 选择大类：弹出可选的大类列表，用户选择后再选子类
 function selectParent() {
 	const all = getAllCategories(formData.type);
 	currentParents.value = all.map(c => ({ name: c.name, children: c.children }));
@@ -77,6 +86,7 @@ function selectParent() {
 	});
 }
 
+// 选择子分类
 function selectChild(parentName: string, children: string[]) {
 	uni.showActionSheet({
 		itemList: children,
@@ -90,25 +100,30 @@ function selectChild(parentName: string, children: string[]) {
 
 const accountList = ref<{name: string}[]>([]);
 
+// 加载账户列表供用户选择
 function loadAccounts() {
 	accountList.value = getAccounts().map(a => ({ name: a.name }));
 }
 
+// 切换支出/收入类型时，清空已选的分类
 function switchType(type: 'expense' | 'income') {
 	formData.type = type;
 	selectedCategory.value = '';
 	formData.category = '';
 }
 
+// 用户从 picker 中选择了账户
 function onAccountConfirm(e: any) {
 	formData.account = e.value[0]?.name || '';
 	showAccount.value = false;
 }
 
+// 用户选择了日期
 function onDateChange(e: any) {
 	formData.date = (e.detail.value || '').slice(0, 10);
 }
 
+// 保存账单：先校验金额/分类/账户是否已填写，再保存或更新
 function saveBill() {
 	if (!formData.amount || parseFloat(formData.amount) <= 0) {
 		uni.showToast({ title: '请输入金额', icon: 'none' });
@@ -145,9 +160,9 @@ function saveBill() {
 
 const editId = ref('');
 
+// 页面显示时加载数据，并检查是否有编辑模式（从账单列表传过来的ID）
 onShow(() => {
 	loadAccounts();
-	// 检查是否有编辑的账单ID
 	const pages = getCurrentPages();
 	const page = pages[pages.length - 1];
 	if (page?.options?.id) {
@@ -170,6 +185,7 @@ onShow(() => {
 		}
 	}
 });
+// 初始化：默认选中支出类型，加载账户列表
 switchType('expense');
 loadAccounts();
 </script>

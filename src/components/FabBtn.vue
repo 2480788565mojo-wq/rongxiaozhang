@@ -1,16 +1,19 @@
 <template>
+	<!-- 悬浮在页面底部的"+"号按钮，点击跳转到记账页 -->
 	<view class="fab-btn" @click="goAdd">
 		<text class="fab-icon">+</text>
 	</view>
 </template>
 
 <script setup lang="ts">
+// 跳转到记账页面
 function goAdd() {
 	uni.navigateTo({ url: "/pages/add/index" });
 }
 </script>
 
 <style lang="scss" scoped>
+// 固定在屏幕底部的圆形按钮样式
 .fab-btn {
 	position: fixed;
 	bottom: 130rpx;

@@ -1,5 +1,6 @@
 <template>
 	<view class="page-stats">
+		<!-- 顶部标题和月份选择 -->
 		<view class="header">
 			<text class="title">统计报表</text>
 			<picker mode="date" fields="month" :value="selYear + '-' + String(selMonth).padStart(2, '0')" @change="onMonthChange">
@@ -10,6 +11,7 @@
 			</picker>
 		</view>
 
+		<!-- 本月收支统计摘要 -->
 		<view class="stats-summary">
 			<view class="stat-box">
 				<text class="stat-label">本月支出</text>
@@ -25,16 +27,19 @@
 			</view>
 		</view>
 
+		<!-- 月度收支趋势折线图 -->
 		<view class="chart-card">
 			<text class="chart-title">月度收支趋势</text>
 			<canvas canvas-id="trendCanvas" id="trendCanvas" class="chart-canvas"></canvas>
 		</view>
 
+		<!-- 支出分类占比饼图 -->
 		<view class="chart-card">
 			<text class="chart-title">支出分类占比</text>
 			<canvas canvas-id="pieCanvas" id="pieCanvas" class="chart-canvas"></canvas>
 		</view>
 
+		<!-- 本月支出 TOP5 排行 -->
 		<view class="top5-card">
 			<text class="chart-title">本月支出TOP{{ top5.length }}</text>
 			<view class="top-item" v-for="(item, index) in top5" :key="index">
@@ -69,11 +74,13 @@ const compareText = ref('');
 const compareColor = ref('');
 const top5 = ref<{name: string; amount: number; percent: number}[]>([]);
 
+// 加载统计数据：当月收支、环比上月对比、分类排行
 function loadData() {
 	const stats = getMonthlyStats(selYear.value, selMonth.value);
 	totalExpense.value = stats.expense;
 	totalIncome.value = stats.income;
 
+	// 计算环比上月的变化百分比
 	let lastM = selMonth.value - 1;
 	let lastY = selYear.value;
 	if (lastM === 0) { lastM = 12; lastY--; }
@@ -83,9 +90,10 @@ function loadData() {
 	if (last.expense > 0) {
 		const diff = ((stats.expense - last.expense) / last.expense * 100);
 		compareText.value = (diff > 0 ? '+' : '') + diff.toFixed(1) + '%';
-		compareColor.value = diff > 0 ? 'expense' : 'income';
+		compareColor.value = diff > 0 ? 'expense' : 'income'; // 支出增加标红，减少标绿
 	}
 
+	// 支出分类排行（取前5）
 	const catStats = getCategoryStats(selYear.value, selMonth.value);
 	if (catStats.length > 0) {
 		const maxAmount = catStats[0].amount;
@@ -101,6 +109,7 @@ function loadData() {
 	nextTick(() => resizeAndDraw());
 }
 
+// 调整画布尺寸并重新绘制图表
 function resizeAndDraw() {
 	['trendCanvas', 'pieCanvas'].forEach((id) => {
 		const canvas = document.querySelector('[canvas-id="' + id + '"]') as HTMLCanvasElement | null;
@@ -113,6 +122,7 @@ function resizeAndDraw() {
 	drawPie();
 }
 
+// 绘制月度收支趋势折线图
 function drawTrend() {
 	const canvas = document.querySelector('[canvas-id="trendCanvas"]') as HTMLCanvasElement | null;
 	if (!canvas) return;
@@ -129,6 +139,7 @@ function drawTrend() {
 	const maxV = Math.max(...allVals, 1);
 	const ceiling = Math.ceil(maxV / 1000) * 1000 || 1000;
 
+	// 绘制网格线
 	for (let i = 0; i <= 4; i++) {
 		const y = pad.top + (ch / 4) * i;
 		ctx.beginPath();
@@ -142,6 +153,7 @@ function drawTrend() {
 		ctx.fillText(String(Math.round((ceiling / 4) * (4 - i))), 2, y + 3);
 	}
 
+	// 绘制一条折线
 	function drawLine(vals: number[], color: string) {
 		ctx.beginPath();
 		ctx.setStrokeStyle(color);
@@ -153,6 +165,7 @@ function drawTrend() {
 		});
 		ctx.stroke();
 
+		// 绘制数据点
 		vals.forEach((v, i) => {
 			const x = pad.left + (cw / (data.length - 1 || 1)) * i;
 			const y = pad.top + ch - (v / ceiling) * ch;
@@ -170,6 +183,7 @@ function drawTrend() {
 	drawLine(data.map(d => d.expense), '#1a5cc8');
 	drawLine(data.map(d => d.income), '#2e8b57');
 
+	// X轴月份标签
 	ctx.setFontSize(10);
 	ctx.setFillStyle('#666');
 	data.forEach((d, i) => {
@@ -177,6 +191,7 @@ function drawTrend() {
 		ctx.fillText(d.month, x - 8, pad.top + ch + 16);
 	});
 
+	// 图例：蓝色=支出 绿色=收入
 	ctx.setFillStyle('#1a5cc8');
 	ctx.fillRect(w - 90, 10, 14, 14);
 	ctx.setFillStyle('#333');
@@ -189,6 +204,7 @@ function drawTrend() {
 	ctx.draw();
 }
 
+// 绘制支出分类占比饼图
 function drawPie() {
 	const canvas = document.querySelector('[canvas-id="pieCanvas"]') as HTMLCanvasElement | null;
 	if (!canvas) return;
@@ -211,6 +227,7 @@ function drawPie() {
 	const cx = w * 0.3, cy = h / 2, r = Math.min(w, h) * 0.3;
 	let start = -Math.PI / 2;
 
+	// 绘制每个分类的扇形
 	catStats.forEach((d, i) => {
 		const angle = (d.amount / total) * Math.PI * 2;
 		ctx.beginPath();
@@ -222,6 +239,7 @@ function drawPie() {
 		start += angle;
 	});
 
+	// 右侧图例（最多显示6个）
 	const lx = w * 0.65;
 	let ly = 15;
 	const show = catStats.slice(0, 6);

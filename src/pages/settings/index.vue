@@ -1,11 +1,13 @@
 <template>
 	<view class="page-settings">
+		<!-- 用户信息卡片 -->
 		<view class="user-card">
 			<image class="avatar" src="/images/logo.jpg" mode="aspectFill"></image>
 			<text class="nickname">荣小账</text>
 			<text class="desc">记录每一笔，心中有数</text>
 		</view>
 
+		<!-- 功能列表：导出、小游戏、分类管理、账户管理 -->
 		<view class="settings-list">
 			<view class="settings-item" @click="goExport">
 				<text class="item-label">📥 导出为 CSV（Excel）</text>
@@ -29,6 +31,7 @@
 			</view>
 		</view>
 
+		<!-- 危险操作：清除所有数据 -->
 		<view class="settings-list">
 			<view class="settings-item" @click="showClearConfirm = true">
 				<text class="item-label danger">🗑️ 清除所有数据</text>
@@ -36,6 +39,7 @@
 			</view>
 		</view>
 
+		<!-- 版本信息和数据存储说明 -->
 		<view class="about-section">
 			<text class="version">荣小账 v1.0.0</text>
 			<text class="storage-tip">数据存储于本地，清除浏览器缓存会丢失</text>
@@ -67,6 +71,7 @@ function goSnake() {
 	uni.navigateTo({ url: '/pages/snake/index' });
 }
 
+// 导出为 CSV 文件（可用 Excel 打开），通过浏览器下载
 function goExport() {
 	const bills = getBills();
 	if (bills.length === 0) {
@@ -75,7 +80,6 @@ function goExport() {
 	}
 	const csv = exportCSV(bills);
 
-	// 在H5环境下，通过下载方式导出
 	const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
@@ -87,6 +91,7 @@ function goExport() {
 	uni.showToast({ title: '导出成功', icon: 'success' });
 }
 
+// 导出 JSON 格式的完整备份
 function exportBackup() {
 	const data = exportAllData();
 	const blob = new Blob([data], { type: 'application/json;charset=utf-8;' });
@@ -103,6 +108,7 @@ function goAccounts() {
 	uni.navigateTo({ url: '/pages/accounts/index' });
 }
 
+// 清除所有本地数据（不可恢复）
 function clearAllData() {
 	showClearConfirm.value = false;
 	clearAllLocalData();

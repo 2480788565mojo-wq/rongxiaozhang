@@ -1,51 +1,57 @@
 // 本地数据存储工具
-// 在连接微信云开发之前，所有数据都存在本地
+// 在连接微信云开发之前，所有数据都存在手机本地（微信小程序缓存）
+// 每条数据都有唯一ID、时间戳，方便后续迁移到云端
 
+// 本地存储的键名，统一管理防止冲突
 const KEYS = {
-	bills: 'rzz_bills',
-	accounts: 'rzz_accounts',
-	budgets: 'rzz_budgets',
-	categories: 'rzz_categories',
+	bills: 'rzz_bills',         // 账单数据
+	accounts: 'rzz_accounts',   // 账户数据
+	budgets: 'rzz_budgets',     // 预算数据
+	categories: 'rzz_categories', // 自定义分类数据
 };
 
-// 生成短ID
+// 生成短ID：使用当前时间戳（36进制）+ 随机数，确保唯一性
 function genId(): string {
 	return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-// 获取当前月份 YYYY-MM
+// 获取当前月份，格式为 YYYY-MM，用于按月筛选账单
 function currentMonth(): string {
 	const d = new Date();
 	return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
-// ============ 账单操作 ============
+// ============ 账单操作（增删改查）============
 
+// 账单的数据结构定义
 export interface Bill {
-	_id: string;
-	type: 'expense' | 'income';
-	amount: number;
-	category: string;
-	categoryPath: string[];
-	account: string;
-	note: string;
-	date: string; // YYYY-MM-DD
-	createdAt: number;
+	_id: string;             // 唯一ID，自动生成
+	type: 'expense' | 'income'; // 类型：支出 或 收入
+	amount: number;          // 金额（单位：元）
+	category: string;        // 分类名称，如"午餐"
+	categoryPath: string[];  // 分类路径，如["餐饮美食","午餐"]
+	account: string;         // 使用的账户，如"微信钱包"
+	note: string;            // 备注，可选
+	date: string;            // 日期，格式 YYYY-MM-DD
+	createdAt: number;       // 创建时间戳
 }
 
+// 获取所有账单列表，从本地存储读取
 export function getBills(): Bill[] {
 	try {
 		const data = uni.getStorageSync(KEYS.bills);
 		return data ? JSON.parse(data) : [];
 	} catch {
-		return [];
+		return []; // 异常时返回空数组，避免页面崩溃
 	}
 }
 
+// 将账单列表保存到本地存储
 export function saveBills(bills: Bill[]) {
 	uni.setStorageSync(KEYS.bills, JSON.stringify(bills));
 }
 
+// 添加一条新账单，自动生成ID和时间戳，新账单放在列表最前面
 export function addBill(bill: Omit<Bill, '_id' | 'createdAt'>): Bill {
 	const bills = getBills();
 	const newBill: Bill = {
@@ -53,11 +59,12 @@ export function addBill(bill: Omit<Bill, '_id' | 'createdAt'>): Bill {
 		...bill,
 		createdAt: Date.now(),
 	};
-	bills.unshift(newBill);
+	bills.unshift(newBill); // 最新的放最前面
 	saveBills(bills);
 	return newBill;
 }
 
+// 更新指定ID的账单信息（只修改传入的字段）
 export function updateBill(id: string, data: Partial<Bill>) {
 	const bills = getBills();
 	const idx = bills.findIndex(b => b._id === id);
@@ -67,23 +74,24 @@ export function updateBill(id: string, data: Partial<Bill>) {
 	}
 }
 
+// 删除指定ID的账单
 export function deleteBill(id: string) {
 	const bills = getBills().filter(b => b._id !== id);
 	saveBills(bills);
 }
 
-// 按月获取账单
+// 按月获取账单：根据年份和月份筛选出当月的所有账单
 export function getBillsByMonth(year: number, month: number): Bill[] {
 	const prefix = year + '-' + String(month).padStart(2, '0');
 	return getBills().filter(b => b.date.startsWith(prefix));
 }
 
-// 获取最近N条
+// 获取最近 N 条账单记录，首页预览用
 export function getRecentBills(n: number = 5): Bill[] {
 	return getBills().slice(0, n);
 }
 
-// 按月统计
+// 按月统计：计算某个月的总支出、总收入、结余（收入-支出）
 export function getMonthlyStats(year: number, month: number) {
 	const bills = getBillsByMonth(year, month);
 	let expense = 0, income = 0;
@@ -94,7 +102,7 @@ export function getMonthlyStats(year: number, month: number) {
 	return { expense, income, balance: income - expense };
 }
 
-// 按分类统计
+// 按分类统计：计算某个月中每个支出分类的花费金额，按金额降序排列
 export function getCategoryStats(year: number, month: number) {
 	const bills = getBillsByMonth(year, month);
 	const map: Record<string, number> = {};
@@ -106,10 +114,10 @@ export function getCategoryStats(year: number, month: number) {
 	});
 	return Object.entries(map)
 		.map(([name, amount]) => ({ name, amount }))
-		.sort((a, b) => b.amount - a.amount);
+		.sort((a, b) => b.amount - a.amount); // 花钱最多的排最前面
 }
 
-// 获取月度趋势（近12个月）
+// 获取近12个月的收支趋势数据，用于统计页面的折线图
 export function getTrendData() {
 	const data: { month: string; expense: number; income: number }[] = [];
 	const now = new Date();
@@ -125,22 +133,24 @@ export function getTrendData() {
 	return data;
 }
 
-// ============ 账户操作 ============
+// ============ 账户操作（增删改查） ============
 
+// 账户的数据结构定义
 export interface Account {
-	_id: string;
-	name: string;
-	type: string;
-	icon: string;
-	balance: number;
+	_id: string;    // 唯一ID
+	name: string;   // 账户名称，如"微信钱包"
+	type: string;   // 账户类型，如"电子钱包""银行卡""现金"
+	icon: string;   // 图标（预留）
+	balance: number; // 账户余额
 }
 
+// 获取所有账户，首次使用时自动创建4个默认账户
 export function getAccounts(): Account[] {
 	try {
 		const data = uni.getStorageSync(KEYS.accounts);
 		if (data) return JSON.parse(data);
 	} catch {}
-	// 默认账户
+	// 首次使用：初始化默认账户
 	const defaults: Account[] = [
 		{ _id: genId(), name: '微信钱包', type: '电子钱包', icon: '', balance: 0 },
 		{ _id: genId(), name: '支付宝', type: '电子钱包', icon: '', balance: 0 },
@@ -151,10 +161,12 @@ export function getAccounts(): Account[] {
 	return defaults;
 }
 
+// 保存账户列表到本地存储
 export function saveAccounts(accounts: Account[]) {
 	uni.setStorageSync(KEYS.accounts, JSON.stringify(accounts));
 }
 
+// 添加新账户，可指定名称和初始余额
 export function addAccount(name: string, balance: number = 0): Account {
 	const accounts = getAccounts();
 	const acct: Account = { _id: genId(), name, type: '其他', icon: '', balance };
@@ -163,21 +175,24 @@ export function addAccount(name: string, balance: number = 0): Account {
 	return acct;
 }
 
+// 删除指定ID的账户
 export function deleteAccount(id: string) {
 	const accounts = getAccounts().filter(a => a._id !== id);
 	saveAccounts(accounts);
 }
 
-// ============ 预算操作 ============
+// ============ 预算操作（按月设置预算） ============
 
+// 预算的数据结构：按月设置，支持总预算和各分类预算
 export interface Budget {
-	_id: string;
-	year: number;
-	month: number;
-	totalBudget: number;
-	categoryBudgets: Record<string, number>;
+	_id: string;                          // 唯一ID
+	year: number;                         // 年份
+	month: number;                        // 月份
+	totalBudget: number;                  // 月总预算金额
+	categoryBudgets: Record<string, number>; // 各分类预算，如 {"餐饮": 1000}
 }
 
+// 查询指定月份的预算，没有设置过则返回 null
 export function getBudget(year: number, month: number): Budget | null {
 	try {
 		const data = uni.getStorageSync(KEYS.budgets);
@@ -189,6 +204,7 @@ export function getBudget(year: number, month: number): Budget | null {
 	return null;
 }
 
+// 保存预算设置。如果同一月份已有预算则覆盖更新，否则新增
 export function saveBudget(budget: Omit<Budget, '_id'>) {
 	const data = uni.getStorageSync(KEYS.budgets);
 	const list: Budget[] = data ? JSON.parse(data) : [];
@@ -202,8 +218,9 @@ export function saveBudget(budget: Omit<Budget, '_id'>) {
 	uni.setStorageSync(KEYS.budgets, JSON.stringify(list));
 }
 
-// ============ 数据导出 ============
+// ============ 数据导出（备份和CSV） ============
 
+// 导出全部数据为 JSON 格式，用于完整备份和恢复
 export function exportAllData(): string {
 	const data = {
 		version: '1.0',
@@ -220,6 +237,7 @@ export function exportAllData(): string {
 	return JSON.stringify(data, null, 2);
 }
 
+// 将账单导出为 CSV 格式（可用 Excel 打开），包含日期、类型、分类、金额等列
 export function exportCSV(bills: Bill[]): string {
 	const header = '日期,类型,分类,金额(元),账户,备注';
 	const rows = bills.map(b => {
@@ -229,25 +247,29 @@ export function exportCSV(bills: Bill[]): string {
 	return header + '\n' + rows.join('\n');
 }
 
+// 清除本地所有数据（危险操作：不可恢复）
 export function clearAllLocalData() {
 	try {
 		uni.removeStorageSync(KEYS.bills);
 		uni.removeStorageSync(KEYS.accounts);
 		uni.removeStorageSync(KEYS.budgets);
-			uni.removeStorageSync(KEYS.categories);
+		uni.removeStorageSync(KEYS.categories);
 	} catch {}
 }
 
-// ============ 分类管理 ============
+// ============ 分类管理（预置分类 + 自定义分类） ============
 
+// 自定义分类的数据结构
+// - parentName 为空（''）表示是"大类"，如"餐饮美食"
+// - parentName 有值表示是"子类"，如"午餐"属于"餐饮美食"
 export interface UserCategory {
 	_id: string;
-	type: 'expense' | 'income';
-	parentName: string; // '' 表示是大类，非空表示属于哪个大类
-	name: string;
+	type: 'expense' | 'income'; // 支出还是收入
+	parentName: string;          // '' 表示是大类，非空表示属于哪个大类
+	name: string;                // 分类名称
 }
 
-// 预置分类（硬编码）
+// 预置分类（硬编码）：应用自带的基础分类，不可修改
 export function getPresetCategories() {
 	return {
 		expense: [
@@ -269,6 +291,7 @@ export function getPresetCategories() {
 	};
 }
 
+// 获取用户自定义的分类列表
 export function getCustomCategories(): UserCategory[] {
 	try {
 		const data = uni.getStorageSync(KEYS.categories);
@@ -278,11 +301,13 @@ export function getCustomCategories(): UserCategory[] {
 	}
 }
 
+// 保存自定义分类列表到本地存储
 export function saveCustomCategories(cats: UserCategory[]) {
 	uni.setStorageSync(KEYS.categories, JSON.stringify(cats));
 }
 
-/** 检查名称是否与预置分类冲突 */
+// 检查新分类名称是否和预置分类冲突
+// 比如用户不能添加一个叫"餐饮美食"的自定义大类，也不能在"餐饮美食"下加一个叫"午餐"的子类
 function isNameConflict(type: 'expense' | 'income', parentName: string, name: string): boolean {
 	const presets = getPresetCategories();
 	for (const p of presets[type]) {
@@ -295,7 +320,7 @@ function isNameConflict(type: 'expense' | 'income', parentName: string, name: st
 	return false;
 }
 
-/** 新增自定义分类 */
+// 新增自定义分类，如果名称已存在或冲突则返回 null
 export function addCustomCategory(type: 'expense' | 'income', parentName: string, name: string): UserCategory | null {
 	const cats = getCustomCategories();
 	// 检查自定义分类中是否已同名
@@ -308,7 +333,8 @@ export function addCustomCategory(type: 'expense' | 'income', parentName: string
 	return cat;
 }
 
-/** 修改自定义分类名称 */
+// 修改自定义分类名称，如果新名称冲突则返回 false
+// 注意：修改大类名称时，会自动同步更新其所有子类的 parentName
 export function updateCustomCategoryName(id: string, newName: string): boolean {
 	const cats = getCustomCategories();
 	const idx = cats.findIndex(c => c._id === id);
@@ -332,7 +358,7 @@ export function updateCustomCategoryName(id: string, newName: string): boolean {
 	return true;
 }
 
-/** 删除自定义分类（同时删除其子类） */
+// 删除自定义分类，如果删除的是大类则同时删除其所有子类
 export function deleteCustomCategory(id: string) {
 	const cats = getCustomCategories();
 	const target = cats.find(c => c._id === id);
@@ -346,19 +372,19 @@ export function deleteCustomCategory(id: string) {
 	saveCustomCategories(filtered);
 }
 
-/** 获取合并后的分类列表（预置 + 自定义），供记账页使用 */
+// 获取合并后的分类列表（预置 + 自定义），供记账页选择分类时使用
 export function getAllCategories(type: 'expense' | 'income') {
 	const presets = getPresetCategories()[type];
 	const customs = getCustomCategories().filter(c => c.type === type);
 
 	const result: { name: string; children: string[]; isCustom: boolean }[] = [];
 
-	// 预置大类
+	// 先加预置的大类
 	presets.forEach(p => {
 		result.push({ name: p.name, children: [...p.children], isCustom: false });
 	});
 
-	// 自定义大类
+	// 再加自定义的大类
 	const customParents = customs.filter(c => c.parentName === '');
 	customParents.forEach(cp => {
 		const children = customs.filter(c => c.parentName === cp.name).map(c => c.name);

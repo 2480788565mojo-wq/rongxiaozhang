@@ -1,5 +1,6 @@
 <template>
 	<view class="page-bills">
+		<!-- 月份筛选和收支汇总 -->
 		<view class="filter-bar">
 			<picker mode="date" fields="month" :value="selYear + '-' + String(selMonth).padStart(2, '0')" @change="onMonthChange">
 			<view class="month-selector">
@@ -13,6 +14,7 @@
 			</view>
 		</view>
 
+		<!-- 按日期分组的账单列表 -->
 		<view class="bill-list" v-for="(group, gi) in billGroups" :key="gi">
 			<view class="date-header">
 				<text class="date-text">{{ group.date }}</text>
@@ -30,6 +32,7 @@
 			</view>
 		</view>
 
+		<!-- 当月无账单时的空状态提示 -->
 		<view class="empty-state" v-if="billGroups.length === 0">
 			<text class="empty-text">暂无账单记录</text>
 		</view>
@@ -52,12 +55,13 @@ const totalExpense = ref(0);
 const totalIncome = ref(0);
 const billGroups = ref<{date: string; expense: number; income: number; list: Bill[]}[]>([]);
 
+// 加载当月账单，按日期分组汇总
 function loadBills() {
 	const bills = getBillsByMonth(selYear.value, selMonth.value);
 	totalExpense.value = 0;
 	totalIncome.value = 0;
 
-	// Group by date
+	// 按日期分组
 	const groups: Record<string, Bill[]> = {};
 	bills.forEach(b => {
 		const d = b.date;
@@ -74,9 +78,10 @@ function loadBills() {
 			else inc += b.amount;
 		});
 		return { date, expense: exp, income: inc, list };
-	}).sort((a, b) => b.date.localeCompare(a.date));
+	}).sort((a, b) => b.date.localeCompare(a.date)); // 最近日期排最前面
 }
 
+// 根据分类名称显示对应的 emoji 图标
 function getIcon(category: string): string {
 	const map: Record<string, string> = {
 		'早餐':'🍜','午餐':'🍜','晚餐':'🍜','外卖':'🥡','水果零食':'🍎','奶茶饮品':'🧋','聚餐宴请':'🍽️',
@@ -97,6 +102,7 @@ function getIcon(category: string): string {
 onShow(() => { loadBills(); });
 loadBills();
 
+// 点击账单跳转到编辑页
 function editBill(item: Bill) {
 	uni.navigateTo({ url: '/pages/add/index?id=' + item._id });
 }
