@@ -38,4 +38,4 @@ Desktop.ini
 .env.*
 
 # Claude Code check markers (runtime artifacts)
-.claude/.checks/
+.claude/checks/

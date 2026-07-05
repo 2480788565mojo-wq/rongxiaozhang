@@ -20,7 +20,7 @@ tools:
 
 ```
 ① 清理旧通行证 → ② 并行检查（tester + quality-engineer） → ③ 轮询等待 → ④ 判定
-    → 都通过 → 颁发通行证（.claude/.checks/pass），用户可以提交
+    → 都通过 → 颁发通行证（.claude/checks/pass），用户可以提交
     → 有失败 → 给出失败原因，不颁发通行证
 ```
 
@@ -28,9 +28,9 @@ tools:
 
 ## 第一步：清理旧通行证
 
-执行 `rm -f .claude/.checks/*`，清除上次运行留下的所有标记文件（包括旧通行证）。
+执行 `rm -f .claude/checks/*`，清除上次运行留下的所有标记文件（包括旧通行证）。
 
-确保 `.claude/.checks/` 目录存在（`mkdir -p .claude/.checks`）。
+确保 `.claude/checks/` 目录存在（`mkdir -p .claude/checks`）。
 
 ---
 
@@ -40,8 +40,8 @@ tools:
 
 | 代理 | 任务 | 通过的标记文件 | 失败的标记文件 |
 |------|------|---------------|---------------|
-| `tester` | 执行 `npx vitest run` | `.claude/.checks/test-passed` | `.claude/.checks/test-failed` |
-| `quality-engineer` | 安全审计 + 注释检查 + 代码规范 | `.claude/.checks/quality-passed` | `.claude/.checks/quality-failed` |
+| `tester` | 执行 `npx vitest run` | `.claude/checks/test-passed` | `.claude/checks/test-failed` |
+| `quality-engineer` | 安全审计 + 注释检查 + 代码规范 | `.claude/checks/quality-passed` | `.claude/checks/quality-failed` |
 
 ---
 
@@ -60,10 +60,10 @@ tools:
 
 ### ✅ 全部通过
 
-同时存在 `.claude/.checks/test-passed` **和** `.claude/.checks/quality-passed`：
+同时存在 `.claude/checks/test-passed` **和** `.claude/checks/quality-passed`：
 
 1. 读取两个标记文件内容，获取评分详情
-2. **颁发通行证** → 写入 `.claude/.checks/pass`，内容格式：
+2. **颁发通行证** → 写入 `.claude/checks/pass`，内容格式：
    ```
    PASS
    单元测试: 45 项全部通过 ✅
@@ -75,7 +75,7 @@ tools:
 
 ### ❌ 有失败
 
-存在 `.claude/.checks/test-failed` 或 `.claude/.checks/quality-failed`：
+存在 `.claude/checks/test-failed` 或 `.claude/checks/quality-failed`：
 
 1. 读取失败标记文件内容
 2. 输出失败报告给用户，列出具体问题和修复建议
@@ -90,7 +90,7 @@ tools:
 
 ## 通行证说明
 
-通行证文件 `.claude/.checks/pass` 被 `.gitignore` 排除，不会被提交到仓库。
+通行证文件 `.claude/checks/pass` 被 `.gitignore` 排除，不会被提交到仓库。
 
 **生命周期：**
 1. `gitcommit-agent` 检查通过后 → 创建

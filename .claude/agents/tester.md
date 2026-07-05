@@ -50,15 +50,15 @@ tools:
 ### 自动执行流程
 
 1. **静默执行测试**：直接运行 `npx vitest run`，不向用户提问
-2. **创建标记文件**：在 `.claude/.checks/` 目录下写入标记文件
-   - 先执行 `mkdir -p .claude/.checks` 确保目录存在
-   - **测试全部通过** → 写入 `.claude/.checks/test-passed`，内容格式：
+2. **创建标记文件**：在 `.claude/checks/` 目录下写入标记文件
+   - 先执行 `mkdir -p .claude/checks` 确保目录存在
+   - **测试全部通过** → 写入 `.claude/checks/test-passed`，内容格式：
      ```
      PASS
      总测试数: N
      全部通过 ✅
      ```
-   - **有测试失败** → 写入 `.claude/.checks/test-failed`，内容格式：
+   - **有测试失败** → 写入 `.claude/checks/test-failed`，内容格式：
      ```
      FAIL
      总测试数: N
@@ -73,4 +73,4 @@ tools:
 - ❌ **不向用户提问任何问题**
 - ❌ **不使用 TodoWrite 或输出报告给用户**
 - ✅ 仅通过标记文件传递结果
-- ✅ 标记文件路径使用相对于项目根目录的路径 `.claude/.checks/`
+- ✅ 标记文件路径使用相对于项目根目录的路径 `.claude/checks/`

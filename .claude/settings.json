@@ -1,14 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir -p \"d:/黑马记账APP/.claude/.checks\")",
+      "Bash(mkdir -p \"d:/黑马记账APP/.claude/checks\")",
       "Bash(echo \"PASS\")",
       "Bash(echo \"exit code: $?\")",
       "Bash(git reset *)",
-      "Bash(mkdir -p .claude/.checks)",
-      "Read(.claude/.checks/*)",
-      "Write(.claude/.checks/*)",
-      "Bash(rm -f .claude/.checks/*)"
+      "Bash(mkdir -p .claude/checks)",
+      "Read(.claude/checks/*)",
+      "Write(.claude/checks/*)",
+      "Bash(rm -f .claude/checks/*)"
     ]
   },
   "hooks": {
@@ -19,7 +19,7 @@
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": "node -e \"var d=JSON.parse(require('fs').readFileSync(0,'utf8'));var cmd=d.tool_input&&d.tool_input.command;if(cmd&&cmd.startsWith('git commit ')&&!require('fs').existsSync('.claude/.checks/pass')){console.log(JSON.stringify({continue:false,stopReason:'❌ 提交被拒绝\\\\n\\\\n请先运行 gitcommit-agent 执行单元测试和质量检查\\\\n全部通过后会颁发通行证，然后重新提交即可'}));process.exit(1);}\"",
+            "command": "node -e \"var d=JSON.parse(require('fs').readFileSync(0,'utf8'));var cmd=d.tool_input&&d.tool_input.command;if(cmd&&cmd.startsWith('git commit ')&&!require('fs').existsSync('.claude/checks/pass')){console.log(JSON.stringify({continue:false,stopReason:'❌ 提交被拒绝\\\\n\\\\n请先运行 gitcommit-agent 执行单元测试和质量检查\\\\n全部通过后会颁发通行证，然后重新提交即可'}));process.exit(1);}\"",
             "timeout": 10,
             "statusMessage": "检查提交通行证..."
           }
@@ -33,7 +33,7 @@
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": "rm -f .claude/.checks/pass",
+            "command": "rm -f .claude/checks/pass",
             "timeout": 5,
             "statusMessage": "清理通行证..."
           }

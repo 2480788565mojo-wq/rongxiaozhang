@@ -151,9 +151,9 @@ tools:
    - 注释质量 → 调用 `/comments-check` 技能
    - 代码规范 → 自行分析
    - 项目完整性 → 自行分析
-2. **创建标记文件**：在 `.claude/.checks/` 目录下写入标记文件
-   - 先执行 `mkdir -p .claude/.checks` 确保目录存在
-   - **全部维度达到及格线（每项 ≥ 60 分）** → 写入 `.claude/.checks/quality-passed`，内容格式：
+2. **创建标记文件**：在 `.claude/checks/` 目录下写入标记文件
+   - 先执行 `mkdir -p .claude/checks` 确保目录存在
+   - **全部维度达到及格线（每项 ≥ 60 分）** → 写入 `.claude/checks/quality-passed`，内容格式：
      ```
      PASS
      安全审计: 88 分
@@ -162,7 +162,7 @@ tools:
      项目完整性: 85 分
      综合评分: 83 分
      ```
-   - **有任何维度不及格** → 写入 `.claude/.checks/quality-failed`，内容格式：
+   - **有任何维度不及格** → 写入 `.claude/checks/quality-failed`，内容格式：
      ```
      FAIL
      安全审计: 88 分
@@ -178,4 +178,4 @@ tools:
 - ❌ **不向用户提问任何问题**
 - ❌ **不使用 TodoWrite 或输出报告给用户**
 - ✅ 仅通过标记文件传递结果
-- ✅ 标记文件路径使用相对于项目根目录的路径 `.claude/.checks/`
+- ✅ 标记文件路径使用相对于项目根目录的路径 `.claude/checks/`
