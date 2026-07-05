@@ -1,14 +1,4 @@
 {
-  "skills": [
-    {
-      "name": "run-app",
-      "directory": ".claude/skills/run-app"
-    },
-    {
-      "name": "rebuild-app",
-      "directory": ".claude/skills/rebuild-app"
-    }
-  ],
   "permissions": {
     "allow": [
       "Bash(npm --version)",
@@ -26,7 +16,35 @@
       "Bash(taskkill /f /im node.exe)",
       "Bash(git init *)",
       "Bash(npm run build:*)",
-      "Bash(ls dist/build/)"
+      "Bash(ls dist/build/)",
+      "Bash(xargs wc -l)",
+      "Bash(npx vitest *)",
+      "Bash(mkdir -p .claude/.checks)",
+      "Bash(rm -f .claude/.checks/*)",
+      "Write(.claude/.checks/*)",
+      "Read(.claude/.checks/*)"
     ]
-  }
+  },
+  "skills": [
+    {
+      "name": "run-app",
+      "directory": ".claude/skills/run-app"
+    },
+    {
+      "name": "rebuild-app",
+      "directory": ".claude/skills/rebuild-app"
+    },
+    {
+      "name": "unit-test",
+      "directory": ".claude/skills/unit-test"
+    },
+    {
+      "name": "comments-check",
+      "directory": ".claude/skills/comments-check"
+    },
+    {
+      "name": "security-audit",
+      "directory": ".claude/skills/security-audit"
+    }
+  ]
 }
