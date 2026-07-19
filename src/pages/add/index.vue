@@ -1,14 +1,18 @@
 <template>
 	<view class="page-add">
+		<view class="page-heading">
+			<text class="heading-title">手动记一笔</text>
+			<text class="heading-subtitle">填写账单明细</text>
+		</view>
 		<view class="form-section">
 			<!-- 收支类型切换：支出 / 收入 -->
 			<view class="type-switch">
-				<view class="type-btn" :class="{ active: formData.type === 'expense' }" @click="switchType('expense')">支出</view>
-				<view class="type-btn" :class="{ active: formData.type === 'income' }" @click="switchType('income')">收入</view>
+				<button class="type-btn" :class="{ active: formData.type === 'expense' }" @click="switchType('expense')">支出</button>
+				<button class="type-btn" :class="{ active: formData.type === 'income' }" @click="switchType('income')">收入</button>
 			</view>
 
 			<!-- 金额输入框 -->
-			<view class="amount-input">
+			<view class="amount-input" :class="formData.type">
 				<text class="currency">¥</text>
 				<input type="digit" v-model="formData.amount" placeholder="0.00" class="amount-field" />
 			</view>
@@ -43,7 +47,7 @@
 		</view>
 
 		<view class="btn-save">
-			<u-button type="primary" size="large" shape="circle" @click="saveBill">保存</u-button>
+			<u-button class="save-button" type="primary" size="large" @click="saveBill">保存</u-button>
 		</view>
 
 		<u-picker :show="showAccount" :columns="[accountList]" @confirm="onAccountConfirm" @cancel="showAccount = false" keyName="name"></u-picker>
@@ -52,7 +56,7 @@
 
 <script setup lang="ts">
 // 导入 Vue 响应式 API 和项目数据操作函数
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive } from 'vue';
 import { addBill, getAccounts, getAllCategories, getBills, updateBill, type Account, type Bill } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
 
@@ -164,7 +168,7 @@ const editId = ref('');
 onShow(() => {
 	loadAccounts();
 	const pages = getCurrentPages();
-	const page = pages[pages.length - 1];
+	const page = pages[pages.length - 1] as any;
 	if (page?.options?.id) {
 		editId.value = page.options.id;
 		const bills = getBills();
@@ -191,29 +195,37 @@ loadAccounts();
 </script>
 
 <style lang="scss" scoped>
-.page-add { padding: 30rpx; }
+.page-add { min-height: 100vh; padding: 24rpx 28rpx 80rpx; box-sizing: border-box; }
+.page-heading { display: flex; margin-bottom: 24rpx; flex-direction: column; }
+.heading-title { color: var(--color-text); font-size: 44rpx; font-weight: 600; }
+.heading-subtitle { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 24rpx; }
+.form-section { padding: 30rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .type-switch {
-	display: flex; background: #f5f5f5; border-radius: 50rpx; padding: 6rpx;
-	width: 240rpx; margin: 0 auto 40rpx;
+	display: grid; grid-template-columns: 1fr 1fr; gap: 8rpx; width: 280rpx; margin: 0 auto 38rpx;
+	padding: 6rpx; border-radius: 24rpx; background: var(--color-surface-muted);
 }
 .type-btn {
-	flex: 1; text-align: center; padding: 12rpx 0;
-	border-radius: 50rpx; font-size: 28rpx; color: #999;
+	height: 66rpx; margin: 0; padding: 0; border: 0; border-radius: 20rpx; color: var(--color-text-secondary);
+	background: transparent; font-size: 27rpx; line-height: 66rpx; text-align: center;
 }
-.type-btn.active { background: #fff; color: #2979ff; font-weight: bold; box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.1); }
+.type-btn:first-child.active { color: var(--color-danger); background: #fff0ef; }
+.type-btn:last-child.active { color: #248c41; background: #eaf8ee; }
 .amount-input {
-	display: flex; align-items: center; justify-content: center; margin-bottom: 40rpx;
+	display: flex; align-items: center; justify-content: center; min-height: 150rpx; margin-bottom: 30rpx;
+	border-bottom: 1rpx solid var(--color-border-muted);
 }
-.currency { font-size: 48rpx; font-weight: bold; color: #333; margin-right: 10rpx; }
-.amount-field { font-size: 72rpx; font-weight: bold; text-align: center; width: 400rpx; height: 100rpx; }
-.form-list { background: #fff; border-radius: 20rpx; overflow: hidden; }
+.currency { margin-right: 10rpx; color: var(--color-text); font-size: 48rpx; font-weight: 700; }
+.amount-field { width: 400rpx; height: 100rpx; color: var(--color-danger); font-family: var(--font-mono); font-size: 64rpx; font-weight: 700; text-align: center; }
+.amount-input.income .amount-field { color: var(--color-success); }
+.form-list { overflow: hidden; }
 .form-item {
-	display: flex; align-items: center; padding: 30rpx;
-	border-bottom: 1rpx solid #f5f5f5;
+	display: flex; align-items: center; min-height: 88rpx; padding: 0 8rpx;
+	border-bottom: 1rpx solid var(--color-border-muted);
 }
-.form-label { font-size: 28rpx; width: 120rpx; }
-.form-value { flex: 1; font-size: 28rpx; color: #333; text-align: right; }
-.note-input { flex: 1; text-align: right; font-size: 28rpx; }
-.arrow { color: #ccc; margin-left: 10rpx; font-size: 28rpx; }
-.btn-save { margin-top: 60rpx; padding: 0 30rpx; }
+.form-label { width: 120rpx; color: var(--color-text-secondary); font-size: 26rpx; }
+.form-value { flex: 1; overflow: hidden; color: var(--color-text); font-size: 27rpx; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.note-input { flex: 1; color: var(--color-text); font-size: 27rpx; text-align: right; }
+.arrow { margin-left: 10rpx; color: var(--color-primary); font-size: 28rpx; }
+.btn-save { margin-top: 28rpx; }
+.save-button { border: 0 !important; border-radius: var(--radius-pill) !important; color: #fff !important; background: var(--color-primary) !important; box-shadow: 0 8rpx 20rpx rgba(var(--color-primary-rgb), .18) !important; font-weight: 600; }
 </style>

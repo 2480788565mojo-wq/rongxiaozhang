@@ -129,12 +129,12 @@ function endGame() {
 function draw() {
 	const ctx = uni.createCanvasContext('snakeCanvas');
 	const s = GRID_SIZE * CELL_SIZE;
-	// 深色背景
-	ctx.setFillStyle('#1a1a2e');
+	// 游戏区域使用浅色底，和应用主题保持一致。
+	ctx.setFillStyle('#f2f3f5');
 	ctx.fillRect(0, 0, s, s);
 
 	// 网格线
-	ctx.setStrokeStyle('#16213e');
+	ctx.setStrokeStyle('#e5e5ea');
 	ctx.setLineWidth(0.5);
 	for (let i = 0; i <= GRID_SIZE; i++) {
 		ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, s); ctx.stroke();
@@ -144,21 +144,21 @@ function draw() {
 	// 蛇身：蛇头亮绿色，蛇尾渐淡
 	snake.forEach((seg, i) => {
 		const a = 1 - (i / snake.length) * 0.5;
-		ctx.setFillStyle(i === 0 ? '#4cd964' : `rgba(76,217,100,${a})`);
+		ctx.setFillStyle(i === 0 ? '#34c759' : `rgba(52,199,89,${a})`);
 		ctx.fillRect(seg.x * CELL_SIZE + 1, seg.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
 	});
 
 	// 蛇眼睛
 	if (snake.length > 0) {
 		const h = snake[0];
-		ctx.setFillStyle('#fff');
+		ctx.setFillStyle('#1d1d1f');
 		const ex = h.x * CELL_SIZE + (dir.x === 1 ? 12 : dir.x === -1 ? 4 : 7);
 		const ey = h.y * CELL_SIZE + (dir.y === 1 ? 12 : dir.y === -1 ? 4 : 7);
 		ctx.fillRect(ex, ey, 4, 4);
 	}
 
 	// 食物：红色圆形带高光
-	ctx.setFillStyle('#ff6b6b');
+	ctx.setFillStyle('#ff3b30');
 	ctx.beginPath();
 	ctx.arc(food.x * CELL_SIZE + 10, food.y * CELL_SIZE + 10, 8, 0, Math.PI * 2);
 	ctx.fill();
@@ -229,7 +229,7 @@ onShow(() => {
 		overlayDesc.value = '点击开始游戏';
 		overlayBtn.value = '开始游戏';
 		const ctx = uni.createCanvasContext('snakeCanvas');
-		ctx.setFillStyle('#1a1a2e');
+		ctx.setFillStyle('#f2f3f5');
 		ctx.fillRect(0, 0, GRID_SIZE * CELL_SIZE, GRID_SIZE * CELL_SIZE);
 		ctx.draw();
 	}
@@ -241,27 +241,26 @@ onHide(() => { stopTimer(); });
 <style lang="scss" scoped>
 .page-snake {
 	display: flex; flex-direction: column; align-items: center;
-	padding: 30rpx; min-height: 100vh; background: #0f0f23;
+	padding: 30rpx; min-height: 100vh; box-sizing: border-box; background: var(--color-bg);
 }
 .game-header {
-	display: flex; align-items: center; gap: 20rpx; margin-bottom: 30rpx;
+	display: flex; align-items: center; gap: 20rpx; margin-bottom: 24rpx; padding: 20rpx 28rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm);
 }
-.score-label, .best-label { font-size: 24rpx; color: #666; }
-.score-value { font-size: 48rpx; font-weight: bold; color: #4cd964; margin-right: 30rpx; }
-.best-value { font-size: 36rpx; font-weight: bold; color: #f0ad4e; }
+.score-label, .best-label { font-size: 24rpx; color: var(--color-text-secondary); }
+.score-value { margin-right: 30rpx; color: var(--color-success); font-family: var(--font-mono); font-size: 48rpx; font-weight: 700; }
+.best-value { color: var(--color-warning); font-family: var(--font-mono); font-size: 36rpx; font-weight: 700; }
 .game-board {
-	position: relative; border-radius: 16rpx; overflow: hidden;
-	box-shadow: 0 0 40rpx rgba(76, 217, 100, 0.15);
+	position: relative; overflow: hidden; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
 }
 .snake-canvas { width: 600rpx; height: 600rpx; display: block; }
 .overlay {
 	position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-	background: rgba(0,0,0,0.7);
+	background: rgba(247,248,250,.92);
 	display: flex; flex-direction: column; align-items: center;
 	justify-content: center; gap: 20rpx;
 }
-.overlay-title { font-size: 40rpx; font-weight: bold; color: #fff; }
-.overlay-desc { font-size: 28rpx; color: #ccc; }
+.overlay-title { font-size: 40rpx; font-weight: 600; color: var(--color-text); }
+.overlay-desc { font-size: 28rpx; color: var(--color-text-secondary); }
 .control-hint { margin-top: 30rpx; }
-.control-hint text { font-size: 24rpx; color: #666; }
+.control-hint text { font-size: 24rpx; color: var(--color-text-secondary); }
 </style>

@@ -1,5 +1,15 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Literal
+
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings
+
+
+INSECURE_JWT_SECRETS = {
+    "your-secret-key-change-in-production",
+    "change-me-to-random-string",
+    "replace-with-at-least-32-random-characters",
+}
 
 class Settings(BaseSettings):
     # 数据库
@@ -29,15 +39,48 @@ class Settings(BaseSettings):
 
     # 应用
     APP_NAME: str = "荣小账 API"
+    ENVIRONMENT: Literal["development", "test", "production"] = "development"
     DEBUG: bool = False
+    ENABLE_DEV_LOGIN: bool = False
     CORS_ORIGINS: list[str] = ["*"]
+
+    # 滥用防护
+    LOGIN_LIMIT_PER_MINUTE: int = Field(default=10, gt=0)
+    AI_TRANSCRIBE_LIMIT_PER_MINUTE: int = Field(default=20, gt=0)
+    AI_TRANSCRIBE_LIMIT_PER_DAY: int = Field(default=200, gt=0)
+    AI_INSIGHT_LIMIT_PER_HOUR: int = Field(default=3, gt=0)
+    AI_INSIGHT_LIMIT_PER_DAY: int = Field(default=10, gt=0)
+    SSE_CONNECTION_LIMIT_PER_USER: int = Field(default=2, gt=0)
+    AGENT_SESSION_TTL_SECONDS: int = Field(default=1800, ge=60)
+    INSIGHT_QUEUE_MAX_LENGTH: int = Field(default=1000, gt=0)
 
     # ChromaDB
     CHROMA_PERSIST_DIR: str = "./chroma_data"
+    EMBEDDING_MODEL: str = "BAAI/bge-small-zh-v1.5"
+    EMBEDDING_DEVICE: str = "cpu"
+
+    # 后台任务
+    INSIGHT_WORKER_ENABLED: bool = True
 
     # 预算告警阈值
     BUDGET_WARNING_RATIO: float = 0.8   # 80% 黄色告警
     BUDGET_BLOCKED_RATIO: float = 1.0   # 100% 红色拦截
+
+    @field_validator("JWT_SECRET")
+    @classmethod
+    def validate_jwt_secret(cls, value: str) -> str:
+        secret = value.strip()
+        if len(secret) < 32 or secret.lower() in INSECURE_JWT_SECRETS:
+            raise ValueError("JWT_SECRET 必须是至少 32 个字符的随机密钥")
+        return secret
+
+    @model_validator(mode="after")
+    def validate_environment_safety(self) -> "Settings":
+        if self.ENVIRONMENT == "production" and self.DEBUG:
+            raise ValueError("生产环境禁止开启 DEBUG")
+        if self.ENVIRONMENT == "production" and self.ENABLE_DEV_LOGIN:
+            raise ValueError("生产环境禁止开启开发登录")
+        return self
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

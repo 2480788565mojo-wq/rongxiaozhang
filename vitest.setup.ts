@@ -28,7 +28,12 @@ const uni = {
   showToast: vi.fn(),
   showToast_noop: vi.fn(),
   navigateTo: vi.fn(),
+  switchTab: vi.fn(),
   navigateBack: vi.fn(),
+  showModal: vi.fn(),
+  authorize: vi.fn(),
+  openSetting: vi.fn(),
+  request: vi.fn(),
   showActionSheet: vi.fn(),
   createCanvasContext: vi.fn(() => ({
     setStrokeStyle: vi.fn(),

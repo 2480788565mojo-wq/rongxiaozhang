@@ -1,0 +1,143 @@
+import asyncio
+from importlib.util import find_spec
+import logging
+from time import monotonic
+from typing import Any
+
+from app.agents.guardian import guardian_node
+from app.agents.oracle import oracle_node
+from app.agents.parser import parser_node
+from app.agents.social import social_node
+from app.agents.state import TransactionState
+from app.config import get_settings
+
+
+END_NODE = "__end__"
+settings = get_settings()
+logger = logging.getLogger(__name__)
+_session_last_seen: dict[str, float] = {}
+
+
+def route_after_parser(state: TransactionState) -> str:
+    if state.get("error"):
+        return END_NODE
+    if state.get("missing_fields"):
+        return END_NODE
+    return "guardian"
+
+
+def route_after_guardian(state: TransactionState) -> str:
+    if state.get("error") or state.get("risk_level") == "blocked":
+        return END_NODE
+    if state.get("is_shared_ledger", False):
+        return "social_ledger"
+    return "oracle"
+
+
+def build_graph() -> Any:
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.graph import END, StateGraph
+
+    builder = StateGraph(TransactionState)
+    builder.add_node("parser", parser_node)
+    builder.add_node("guardian", guardian_node)
+    builder.add_node("social_ledger", social_node)
+    builder.add_node("oracle", oracle_node)
+    builder.set_entry_point("parser")
+
+    builder.add_conditional_edges(
+        "parser",
+        route_after_parser,
+        {
+            "guardian": "guardian",
+            END_NODE: END,
+        },
+    )
+    builder.add_conditional_edges(
+        "guardian",
+        route_after_guardian,
+        {
+            "social_ledger": "social_ledger",
+            "oracle": "oracle",
+            END_NODE: END,
+        },
+    )
+    builder.add_edge("social_ledger", "oracle")
+    builder.add_edge("oracle", END)
+
+    return builder.compile(
+        checkpointer=MemorySaver(),
+        interrupt_before=["guardian"],
+    )
+
+
+# Keep pure routing helpers importable while dependencies are being installed.
+# A normal backend process builds this immediately once LangGraph is available.
+compiled_graph = build_graph() if find_spec("langgraph") is not None else None
+
+
+def get_compiled_graph() -> Any:
+    if compiled_graph is None:
+        raise RuntimeError("LangGraph 尚未安装，无法启动 Agent 状态机")
+    return compiled_graph
+
+
+def transaction_thread_id(user_id: int, ledger_id: int, session_id: str) -> str:
+    return f"user:{user_id}:ledger:{ledger_id}:session:{session_id}"
+
+
+def prepare_transaction_config(
+    graph: Any,
+    user_id: int,
+    ledger_id: int,
+    session_id: str,
+) -> dict[str, dict[str, str]]:
+    now = monotonic()
+    cleanup_expired_transaction_sessions(graph, now=now)
+
+    thread_id = transaction_thread_id(user_id, ledger_id, session_id)
+    _session_last_seen[thread_id] = now
+    return {"configurable": {"thread_id": thread_id}}
+
+
+def cleanup_expired_transaction_sessions(
+    graph: Any | None = None,
+    *,
+    now: float | None = None,
+) -> int:
+    target_graph = graph or compiled_graph
+    if target_graph is None:
+        return 0
+    current_time = monotonic() if now is None else now
+    expired = [
+        thread_id
+        for thread_id, last_seen in _session_last_seen.items()
+        if current_time - last_seen >= settings.AGENT_SESSION_TTL_SECONDS
+    ]
+    for thread_id in expired:
+        target_graph.checkpointer.delete_thread(thread_id)
+        _session_last_seen.pop(thread_id, None)
+    return len(expired)
+
+
+async def run_transaction_session_cleanup(interval_seconds: int = 60) -> None:
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            cleanup_expired_transaction_sessions()
+        except Exception:
+            logger.warning("AI 过期会话清理失败", exc_info=True)
+
+
+async def clear_transaction_session(
+    user_id: int,
+    ledger_id: int,
+    session_id: str,
+) -> None:
+    thread_id = transaction_thread_id(user_id, ledger_id, session_id)
+    _session_last_seen.pop(thread_id, None)
+    if compiled_graph is not None:
+        try:
+            await compiled_graph.checkpointer.adelete_thread(thread_id)
+        except Exception:
+            logger.warning("AI 会话清理失败，将由过期清理再次处理", exc_info=True)

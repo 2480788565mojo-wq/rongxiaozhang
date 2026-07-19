@@ -22,7 +22,8 @@
       "Bash(mkdir -p .claude/.checks)",
       "Bash(rm -f .claude/.checks/*)",
       "Write(.claude/.checks/*)",
-      "Read(.claude/.checks/*)"
+      "Read(.claude/.checks/*)",
+      "Bash(bash \"C:/Users/76804/.claude/plugins/cache/superpowers-marketplace/superpowers/6.0.3/skills/subagent-driven-development/scripts/review-package\" 12ef0ada8f65303ed17b26597dcee1b0df2dd23b HEAD)"
     ]
   },
   "skills": [

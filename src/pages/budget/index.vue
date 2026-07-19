@@ -1,201 +1,114 @@
 <template>
-	<view class="page-budget">
-		<!-- 月度总预算概览 -->
-		<view class="section">
-			<text class="section-title">每月总预算</text>
-			<view class="total-budget-card">
-				<view class="budget-item-col">
-					<text class="label">月预算</text>
-					<text class="value">¥{{ totalBudget }}</text>
-				</view>
-				<view class="budget-item-col">
-					<text class="label">已使用</text>
-					<text class="value">¥{{ usedAmount.toFixed(2) }}</text>
-				</view>
-				<view class="budget-item-col">
-					<text class="label">剩余</text>
-					<text class="value" :class="{ danger: remainAmount < 0 }">¥{{ remainAmount.toFixed(2) }}</text>
-				</view>
-			</view>
-			<!-- 预算进度条，超支显示红色 -->
-			<u-line-progress
-				:percentage="usedPercent"
-				:activeColor="usedPercent > 100 ? '#dd524d' : usedPercent > 80 ? '#f0ad4e' : '#2979ff'"
-				height="16"
-			></u-line-progress>
-			<view class="set-budget-btn">
-				<u-button type="info" size="small" plain @click="showSetTotal = true">设置总预算</u-button>
-			</view>
-		</view>
-
-		<!-- 分类预算列表 -->
-		<view class="section">
-			<text class="section-title">分类预算</text>
-			<view class="category-item" v-for="(item, idx) in categoryBudgets" :key="idx">
-				<view class="cate-header">
-					<text>{{ item.name }}</text>
-					<text class="cate-value">¥{{ item.used.toFixed(2) }} / ¥{{ item.budget }}</text>
-				</view>
-				<u-line-progress
-					:percentage="item.percent"
-					:activeColor="item.percent > 100 ? '#dd524d' : item.percent > 80 ? '#f0ad4e' : '#2979ff'"
-					height="12"
-				></u-line-progress>
-			</view>
-			<view class="empty-tip" v-if="categoryBudgets.length === 0">
-				<text>还没有设置分类预算</text>
-			</view>
-			<view class="set-budget-btn">
-				<u-button type="primary" size="small" plain @click="showAddCategory">添加分类预算</u-button>
-			</view>
-		</view>
-
-		<u-modal :show="showSetTotal" title="设置总预算" @confirm="onSetTotal" @cancel="showSetTotal = false">
-			<input class="modal-input" type="digit" v-model="editTotal" placeholder="输入月预算金额" />
-		</u-modal>
-
-		<u-modal :show="showEditCat" title="设置分类预算" @confirm="onSetCategory" @cancel="showEditCat = false">
-			<view class="modal-form">
-					<text class="modal-label">当前分类：{{ editingCatName }}</text>
-					<input class="modal-input" type="digit" v-model="editCatBudget" placeholder="输入预算金额" />
-			</view>
-		</u-modal>
-	</view>
+  <view class="page">
+    <view class="month-head"><text class="title">{{ year }}年{{ month }}月预算</text><text>{{ ledgerStore.current?.name }}</text></view>
+    <view class="gauge"><BudgetGauge :statuses="budgetStore.statuses" /></view>
+    <label class="total-row"><text>总预算</text><input v-model.number="totalBudget" type="digit" placeholder="0.00" /></label>
+    <view class="category-list">
+      <view v-for="category in budgetCategories" :key="category" class="category-row">
+        <view><text>{{ category }}</text><text v-if="statusMap[category]">已花 ¥{{ statusMap[category].spent.toFixed(2) }}</text></view>
+        <input v-model.number="categoryBudgets[category]" type="digit" placeholder="未设置" />
+      </view>
+    </view>
+    <button class="save" :loading="saving" @click="save">保存预算</button>
+  </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { getBudget, saveBudget, getMonthlyStats, getCategoryStats, getAllCategories } from '@/utils/store';
-import { onShow } from '@dcloudio/uni-app';
+import { computed, reactive, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+import BudgetGauge from "@/components/charts/BudgetGauge.vue";
+import { getBudget } from "@/api/budgets";
+import { useBudgetStore } from "@/stores/budget";
+import { useCategoryStore } from "@/stores/category";
+import { useLedgerStore } from "@/stores/ledger";
 
-const now = new Date();
-const year = now.getFullYear();
-const month = now.getMonth() + 1;
+const ledgerStore = useLedgerStore();
+const budgetStore = useBudgetStore();
+const categoryStore = useCategoryStore();
+const year = ref(0);
+const month = ref(0);
+type BudgetInput = number | string | null | undefined;
 
-const totalBudget = ref(0);
-const usedAmount = ref(0);
-const remainAmount = computed(() => totalBudget.value - usedAmount.value);
-const usedPercent = computed(() => {
-	if (totalBudget.value <= 0) return 0;
-	return Math.min(150, Math.round((usedAmount.value / totalBudget.value) * 100));
-});
+const totalBudget = ref<BudgetInput>(null);
+const categoryBudgets = reactive<Record<string, BudgetInput>>({});
+const saving = ref(false);
+const presets = ["餐饮美食", "交通出行", "购物消费", "居住物业", "休闲娱乐", "人情社交", "医疗健康", "教育学习", "通讯"];
+const budgetCategories = computed(() => Array.from(new Set([...presets, ...categoryStore.categories.filter((item) => item.type === "expense" && !item.parent_name).map((item) => item.name)])));
+const statusMap = computed(() => Object.fromEntries(budgetStore.statuses.map((item) => [item.category, item])));
 
-const categoryBudgets = ref<{name: string; budget: number; used: number; percent: number}[]>([]);
-
-const showSetTotal = ref(false);
-const editTotal = ref('');
-
-const showEditCat = ref(false);
-const editingCatName = ref('');
-const editCatBudget = ref('');
-
-// 加载预算数据：读取已保存的预算，计算使用量和进度百分比
-function loadBudget() {
-	const stats = getMonthlyStats(year, month);
-	usedAmount.value = stats.expense;
-
-	const saved = getBudget(year, month);
-	if (saved) {
-		totalBudget.value = saved.totalBudget;
-		const catStats = getCategoryStats(year, month);
-		const catMap: Record<string, number> = {};
-		catStats.forEach(c => { catMap[c.name] = c.amount; });
-
-		categoryBudgets.value = Object.entries(saved.categoryBudgets).map(([name, budget]) => {
-			const used = catMap[name] || 0;
-			return {
-				name,
-				budget,
-				used,
-				percent: Math.min(150, Math.round((used / budget) * 100)),
-			};
-		});
-	}
+function currentPeriod() {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
-// 设置总预算，保存到本地存储
-function onSetTotal() {
-	const val = parseFloat(editTotal.value);
-	if (val > 0) {
-		totalBudget.value = val;
-		const saved = getBudget(year, month);
-		saveBudget({
-			year, month,
-			totalBudget: val,
-			categoryBudgets: saved?.categoryBudgets || {},
-		});
-		uni.showToast({ title: '设置成功', icon: 'success' });
-	}
-	showSetTotal.value = false;
+function normalizeBudget(value: BudgetInput): number | null | undefined {
+  if (value === "" || value === null || value === undefined) return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return undefined;
+  return amount;
 }
 
-// 弹出分类列表供用户选择，为选中的分类设置预算
-function showAddCategory() {
-	const cats = getAllCategories('expense').map(c => c.name);
-	uni.showActionSheet({
-		itemList: cats,
-		success: (res) => {
-			const name = cats[res.tapIndex];
-			if (name) {
-				editingCatName.value = name;
-				editCatBudget.value = '';
-				showEditCat.value = true;
-			}
-		},
-	});
+async function load() {
+  const period = currentPeriod();
+  year.value = period.year;
+  month.value = period.month;
+  if (!ledgerStore.currentId) await ledgerStore.fetchLedgers();
+  if (!ledgerStore.currentId) return;
+  await Promise.all([
+    categoryStore.fetchCategories(ledgerStore.currentId),
+    budgetStore.fetchStatuses(ledgerStore.currentId, year.value, month.value),
+  ]);
+  const data = await getBudget(ledgerStore.currentId, year.value, month.value);
+  totalBudget.value = data?.total_budget ?? null;
+  Object.keys(categoryBudgets).forEach((key) => delete categoryBudgets[key]);
+  Object.assign(categoryBudgets, data?.category_budgets || {});
 }
+onShow(() => void load());
 
-// 保存分类预算
-function onSetCategory() {
-	const val = parseFloat(editCatBudget.value);
-	if (editingCatName.value && val > 0) {
-		const saved = getBudget(year, month) || {
-			totalBudget: totalBudget.value || 5000,
-			categoryBudgets: {} as Record<string, number>,
-		};
-		saved.categoryBudgets = saved.categoryBudgets || {};
-		saved.categoryBudgets[editingCatName.value] = val;
-		saveBudget({
-			year, month,
-			totalBudget: saved.totalBudget,
-			categoryBudgets: saved.categoryBudgets,
-		});
-		loadBudget();
-		uni.showToast({ title: '设置成功', icon: 'success' });
-	}
-	showEditCat.value = false;
+async function save() {
+  if (!ledgerStore.currentId) return;
+  const period = currentPeriod();
+  if (period.year !== year.value || period.month !== month.value) {
+    await load();
+    uni.showToast({ title: "月份已更新，请确认后再保存", icon: "none" });
+    return;
+  }
+  saving.value = true;
+  try {
+    const normalizedTotal = normalizeBudget(totalBudget.value);
+    if (normalizedTotal === undefined) {
+      uni.showToast({ title: "总预算必须是非负数字", icon: "none" });
+      return;
+    }
+    const cleaned: Record<string, number> = {};
+    for (const [category, value] of Object.entries(categoryBudgets)) {
+      const amount = normalizeBudget(value);
+      if (amount === undefined) {
+        uni.showToast({ title: `${category}预算格式不正确`, icon: "none" });
+        return;
+      }
+      if (amount !== null) cleaned[category] = amount;
+    }
+    await budgetStore.save({ ledger_id: ledgerStore.currentId, year: year.value, month: month.value, total_budget: normalizedTotal, category_budgets: cleaned });
+    uni.showToast({ title: "预算已保存", icon: "success" });
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : "预算保存失败，请稍后重试", icon: "none" });
+  } finally { saving.value = false; }
 }
-
-onShow(() => { loadBudget(); });
-loadBudget();
 </script>
 
-<style lang="scss" scoped>
-.page-budget { padding: 30rpx; padding-bottom: 120rpx; }
-.section { margin-bottom: 40rpx; }
-.section-title { font-size: 30rpx; font-weight: bold; display: block; margin-bottom: 20rpx; }
-
-.total-budget-card {
-	display: flex; justify-content: space-around; background: #fff;
-	border-radius: 20rpx; padding: 30rpx; margin-bottom: 20rpx;
-	box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
-}
-.label { font-size: 24rpx; color: #999; display: block; }
-.value { font-size: 36rpx; font-weight: bold; display: block; margin-top: 8rpx; }
-.value.danger { color: #dd524d; }
-
-.set-budget-btn { margin-top: 20rpx; text-align: center; }
-
-.category-item { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; }
-.cate-header { display: flex; justify-content: space-between; font-size: 26rpx; margin-bottom: 12rpx; }
-.cate-value { color: #999; }
-
-.empty-tip { text-align: center; padding: 40rpx; color: #ccc; font-size: 26rpx; }
-
-.modal-form { padding: 20rpx; }
-.modal-label { font-size: 28rpx; display: block; margin-bottom: 16rpx; color: #666; }
-.modal-input {
-	border: 1rpx solid #eee; border-radius: 12rpx; padding: 20rpx;
-	font-size: 28rpx; margin: 10rpx;
-}
+<style scoped>
+.page { min-height: 100vh; padding: 24rpx 28rpx 80rpx; box-sizing: border-box; }
+.month-head { display: flex; align-items: center; justify-content: space-between; }
+.title { font-size: 40rpx; font-weight: 600; }
+.month-head > text:last-child { color: var(--color-text-secondary); font-size: 24rpx; }
+.gauge { margin-top: 20rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.total-row, .category-row { display: flex; align-items: center; justify-content: space-between; min-height: 96rpx; padding: 0 24rpx; border-bottom: 1rpx solid var(--color-border-muted); background: var(--color-surface); }
+.total-row { margin-top: 18rpx; border: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.total-row input, .category-row input { width: 220rpx; text-align: right; }
+.category-list { margin-top: 18rpx; overflow: hidden; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.category-row:last-child { border-bottom: 0; }
+.category-row > view { display: flex; flex-direction: column; }
+.category-row view text:last-child { margin-top: 5rpx; color: var(--color-text-secondary); font-size: 22rpx; }
+.save { margin-top: 28rpx; color: #fff; background: var(--color-primary); border-radius: var(--radius-pill); }
 </style>

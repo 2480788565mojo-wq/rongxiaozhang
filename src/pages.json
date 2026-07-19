@@ -19,9 +19,21 @@
 			}
 		},
 		{
+			"path": "pages/transcribe/index",
+			"style": {
+				"navigationBarTitleText": "AI 智能记账"
+			}
+		},
+		{
 			"path": "pages/bills/index",
 			"style": {
 				"navigationBarTitleText": "账单"
+			}
+		},
+		{
+			"path": "pages/bills/detail",
+			"style": {
+				"navigationBarTitleText": "账单详情"
 			}
 		},
 		{
@@ -55,6 +67,36 @@
 			}
 		},
 		{
+			"path": "pages/ledgers/index",
+			"style": {
+				"navigationBarTitleText": "账本管理"
+			}
+		},
+		{
+			"path": "pages/ledgers/members",
+			"style": {
+				"navigationBarTitleText": "账本成员"
+			}
+		},
+		{
+			"path": "pages/ledgers/settle",
+			"style": {
+				"navigationBarTitleText": "AA 结算"
+			}
+		},
+		{
+			"path": "pages/insights/index",
+			"style": {
+				"navigationBarTitleText": "消费洞察"
+			}
+		},
+		{
+			"path": "pages/insights/report",
+			"style": {
+				"navigationBarTitleText": "洞察报告"
+			}
+		},
+		{
 			"path": "pages/snake/index",
 			"style": {
 				"navigationBarTitleText": "贪吃蛇"
@@ -64,14 +106,14 @@
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "荣小账",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
+		"navigationBarBackgroundColor": "#F7F8FA",
+		"backgroundColor": "#F7F8FA"
 	},
 	"tabBar": {
-		"color": "#999",
-		"selectedColor": "#2979ff",
-		"backgroundColor": "#fff",
-		"borderStyle": "black",
+		"color": "#86868B",
+		"selectedColor": "#4A90E2",
+		"backgroundColor": "#FFFFFF",
+		"borderStyle": "white",
 		"height": "110rpx",
 		"list": [
 			{
@@ -81,6 +123,10 @@
 			{
 				"pagePath": "pages/stats/index",
 				"text": "统计"
+			},
+			{
+				"pagePath": "pages/transcribe/index",
+				"text": "记账"
 			},
 			{
 				"pagePath": "pages/bills/index",

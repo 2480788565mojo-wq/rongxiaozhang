@@ -37,5 +37,12 @@ Desktop.ini
 .env
 .env.*
 
+# Python backend runtime artifacts
+backend/.venv/
+backend/chroma_data/
+backend/__pycache__/
+backend/**/*.pyc
+backend/*.db
+
 # Claude Code check markers (runtime artifacts)
 .claude/checks/

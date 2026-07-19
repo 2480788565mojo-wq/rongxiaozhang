@@ -1,142 +1,84 @@
 <template>
-	<view class="page-bills">
-		<!-- 月份筛选和收支汇总 -->
-		<view class="filter-bar">
-			<picker mode="date" fields="month" :value="selYear + '-' + String(selMonth).padStart(2, '0')" @change="onMonthChange">
-			<view class="month-selector">
-				<text>{{ currentMonth }}</text>
-				<text class="arrow">▼</text>
-			</view>
-			</picker>
-			<view class="total-summary">
-				<text>支出 ¥{{ totalExpense.toFixed(2) }}</text>
-				<text class="income"> 收入 ¥{{ totalIncome.toFixed(2) }}</text>
-			</view>
-		</view>
-
-		<!-- 按日期分组的账单列表 -->
-		<view class="bill-list" v-for="(group, gi) in billGroups" :key="gi">
-			<view class="date-header">
-				<text class="date-text">{{ group.date }}</text>
-				<text class="date-total">支出 ¥{{ group.expense.toFixed(2) }} 收入 ¥{{ group.income.toFixed(2) }}</text>
-			</view>
-			<view class="bill-item" v-for="bill in group.list" :key="bill._id" @click="editBill(bill)">
-				<view class="bill-icon">{{ getIcon(bill.category) }}</view>
-				<view class="bill-info">
-					<text class="bill-cate">{{ bill.category }}</text>
-					<text class="bill-note">{{ bill.note || bill.account }}</text>
-				</view>
-				<text class="bill-amount" :class="bill.type">
-					{{ bill.type === 'expense' ? '-' : '+' }}¥{{ bill.amount.toFixed(2) }}
-				</text>
-			</view>
-		</view>
-
-		<!-- 当月无账单时的空状态提示 -->
-		<view class="empty-state" v-if="billGroups.length === 0">
-			<text class="empty-text">暂无账单记录</text>
-		</view>
-		<FabBtn />
-	</view>
+  <view class="page">
+    <view class="filters">
+      <picker mode="date" fields="month" :value="monthValue" @change="changeMonth">
+        <view class="filter-button">{{ year }}年{{ month }}月</view>
+      </picker>
+      <picker :range="categoryOptions" @change="changeCategory">
+        <view class="filter-button">{{ selectedCategory || "全部分类" }}</view>
+      </picker>
+    </view>
+    <view class="totals"><text>支出 ¥{{ totalExpense.toFixed(2) }}</text><text>收入 ¥{{ totalIncome.toFixed(2) }}</text></view>
+    <view v-for="group in groups" :key="group.date" class="date-group">
+      <view class="date-head"><text>{{ group.date }}</text><text>支 {{ group.expense.toFixed(2) }} · 收 {{ group.income.toFixed(2) }}</text></view>
+      <view v-for="bill in group.items" :key="bill.id" class="bill" @click="openBill(bill.id)">
+        <view class="mark">{{ bill.category.slice(0, 1) }}</view>
+        <view class="copy"><text>{{ bill.category }}</text><text>{{ bill.note || bill.account || "无备注" }}</text></view>
+        <text class="amount" :class="bill.type">{{ bill.type === "expense" ? "-" : "+" }}¥{{ bill.amount.toFixed(2) }}</text>
+      </view>
+    </view>
+    <view v-if="!groups.length" class="empty">该月份暂无账单</view>
+    <FabBtn />
+  </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { getBillsByMonth, type Bill } from '@/utils/store';
-import { onShow } from '@dcloudio/uni-app';
-import FabBtn from '@/components/FabBtn.vue';
+import { computed, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+import FabBtn from "@/components/FabBtn.vue";
+import { useBillStore } from "@/stores/bill";
+import { useLedgerStore } from "@/stores/ledger";
+import type { Bill } from "@/types";
 
+const billStore = useBillStore();
+const ledgerStore = useLedgerStore();
 const now = new Date();
-const selYear = ref(now.getFullYear());
-const selMonth = ref(now.getMonth() + 1);
-const currentMonth = computed(() => selYear.value + '年' + selMonth.value + '月');
+const year = ref(now.getFullYear());
+const month = ref(now.getMonth() + 1);
+const selectedCategory = ref("");
+const monthValue = computed(() => `${year.value}-${String(month.value).padStart(2, "0")}`);
+const categoryOptions = computed(() => ["全部分类", ...Array.from(new Set(billStore.bills.map((item) => item.category)))]);
+const totalExpense = computed(() => billStore.bills.filter((item) => item.type === "expense").reduce((sum, item) => sum + item.amount, 0));
+const totalIncome = computed(() => billStore.bills.filter((item) => item.type === "income").reduce((sum, item) => sum + item.amount, 0));
+const groups = computed(() => {
+  const map = new Map<string, Bill[]>();
+  billStore.bills.forEach((bill) => map.set(bill.bill_date, [...(map.get(bill.bill_date) || []), bill]));
+  return Array.from(map.entries()).map(([date, items]) => ({
+    date,
+    items,
+    expense: items.filter((item) => item.type === "expense").reduce((sum, item) => sum + item.amount, 0),
+    income: items.filter((item) => item.type === "income").reduce((sum, item) => sum + item.amount, 0),
+  })).sort((a, b) => b.date.localeCompare(a.date));
+});
 
-const totalExpense = ref(0);
-const totalIncome = ref(0);
-const billGroups = ref<{date: string; expense: number; income: number; list: Bill[]}[]>([]);
-
-// 加载当月账单，按日期分组汇总
-function loadBills() {
-	const bills = getBillsByMonth(selYear.value, selMonth.value);
-	totalExpense.value = 0;
-	totalIncome.value = 0;
-
-	// 按日期分组
-	const groups: Record<string, Bill[]> = {};
-	bills.forEach(b => {
-		const d = b.date;
-		if (!groups[d]) groups[d] = [];
-		groups[d].push(b);
-		if (b.type === 'expense') totalExpense.value += b.amount;
-		else totalIncome.value += b.amount;
-	});
-
-	billGroups.value = Object.entries(groups).map(([date, list]) => {
-		let exp = 0, inc = 0;
-		list.forEach(b => {
-			if (b.type === 'expense') exp += b.amount;
-			else inc += b.amount;
-		});
-		return { date, expense: exp, income: inc, list };
-	}).sort((a, b) => b.date.localeCompare(a.date)); // 最近日期排最前面
+async function load() {
+  if (!ledgerStore.currentId) await ledgerStore.fetchLedgers();
+  if (ledgerStore.currentId) await billStore.fetchBills(ledgerStore.currentId, true, { year: year.value, month: month.value, category: selectedCategory.value || undefined });
 }
-
-// 根据分类名称显示对应的 emoji 图标
-function getIcon(category: string): string {
-	const map: Record<string, string> = {
-		'早餐':'🍜','午餐':'🍜','晚餐':'🍜','外卖':'🥡','水果零食':'🍎','奶茶饮品':'🧋','聚餐宴请':'🍽️',
-		'公交地铁':'🚌','打车':'🚗','加油':'⛽','火车/飞机':'🚄',
-		'服装鞋包':'👗','美妆护肤':'💄','家居日用':'🏠','数码电器':'📱','文具书籍':'📚',
-		'房租/房贷':'🏠','水费':'🚰','电费':'⚡','燃气费':'🔥',
-		'电影演出':'🎬','运动健身':'🏋️','游戏充值':'🎮','旅游度假':'✈️',
-		'红包礼金':'🧧','送礼':'🎁',
-		'看病挂号':'🏥','药品':'💊',
-		'课程培训':'📖','书籍':'📕',
-		'话费':'📞',
-		'工资':'💰','奖金':'🏆',
-		'退款':'↩️',
-	};
-	return map[category] || '📌';
-}
-
-onShow(() => { loadBills(); });
-loadBills();
-
-// 点击账单跳转到编辑页
-function editBill(item: Bill) {
-	uni.navigateTo({ url: '/pages/add/index?id=' + item._id });
-}
+onShow(() => void load());
+function changeMonth(event: any) { const [y, m] = event.detail.value.split("-").map(Number); year.value = y; month.value = m; void load(); }
+function changeCategory(event: any) { const value = categoryOptions.value[Number(event.detail.value)]; selectedCategory.value = value === "全部分类" ? "" : value; void load(); }
+function openBill(id: number) { uni.navigateTo({ url: `/pages/bills/detail?id=${id}` }); }
 </script>
 
-<style lang="scss" scoped>
-.page-bills { padding-bottom: 120rpx; }
-.filter-bar {
-	display: flex; justify-content: space-between; align-items: center;
-	padding: 20rpx 30rpx; background: #fff; border-bottom: 1rpx solid #f5f5f5;
-}
-.month-selector { font-size: 30rpx; font-weight: bold; }
-.arrow { font-size: 20rpx; margin-left: 10rpx; color: #999; }
-.total-summary { font-size: 24rpx; color: #999; }
-.total-summary .income { margin-left: 20rpx; }
-
-.date-header {
-	display: flex; justify-content: space-between;
-	padding: 20rpx 30rpx 10rpx; font-size: 24rpx; color: #999;
-}
-.bill-item {
-	display: flex; align-items: center; padding: 20rpx 30rpx;
-	background: #fff; border-bottom: 1rpx solid #f5f5f5;
-}
-.bill-icon {
-	width: 64rpx; height: 64rpx; border-radius: 50%; background: #f5f5f5;
-	display: flex; align-items: center; justify-content: center; font-size: 28rpx;
-}
-.bill-info { flex: 1; margin-left: 20rpx; }
-.bill-cate { font-size: 28rpx; display: block; }
-.bill-note { font-size: 22rpx; color: #999; display: block; margin-top: 4rpx; }
-.bill-amount { font-size: 30rpx; font-weight: bold; }
-.bill-amount.income { color: #4cd964; }
-.bill-amount.expense { color: #333; }
-.empty-state { text-align: center; padding: 100rpx 0; }
-.empty-text { color: #ccc; font-size: 28rpx; }
+<style scoped>
+.page { min-height: 100vh; padding: 24rpx 28rpx 150rpx; box-sizing: border-box; }
+.filters, .totals, .date-head, .bill { display: flex; align-items: center; justify-content: space-between; }
+.filters { gap: 16rpx; padding: 8rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.filters picker { min-width: 0; flex: 1; }
+.filter-button { padding: 18rpx 12rpx; border-radius: 24rpx; color: var(--color-primary); background: var(--color-primary-soft); font-size: 25rpx; text-align: center; }
+.totals { margin-top: 16rpx; padding: 24rpx 28rpx; border-radius: var(--radius-lg); color: var(--color-text-secondary); background: var(--color-surface); box-shadow: var(--shadow-sm); font-size: 24rpx; }
+.totals text:first-child { color: var(--color-danger); }
+.totals text:last-child { color: var(--color-success); }
+.date-group { margin-top: 18rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.date-head { padding: 22rpx 24rpx 12rpx; color: var(--color-text-secondary); font-size: 23rpx; }
+.bill { min-height: 104rpx; padding: 0 24rpx; border-bottom: 1rpx solid var(--color-border-muted); }
+.bill:last-child { border-bottom: 0; }
+.mark { display: flex; align-items: center; justify-content: center; width: 60rpx; height: 60rpx; border-radius: 20rpx; color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
+.copy { display: flex; flex: 1; min-width: 0; flex-direction: column; margin-left: 18rpx; }
+.copy text:last-child { margin-top: 5rpx; overflow: hidden; color: var(--color-text-secondary); font-size: 22rpx; text-overflow: ellipsis; white-space: nowrap; }
+.amount { max-width: 220rpx; overflow: hidden; font-family: var(--font-mono); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.amount.expense { color: var(--color-danger); }
+.amount.income { color: var(--color-success); }
+.empty { margin-top: 18rpx; padding: 120rpx 24rpx; border-radius: var(--radius-lg); color: var(--color-text-secondary); background: var(--color-surface); text-align: center; }
 </style>

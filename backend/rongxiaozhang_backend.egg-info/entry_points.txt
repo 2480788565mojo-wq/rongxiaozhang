@@ -1,0 +1,2 @@
+[console_scripts]
+rxz-insight-worker = app.workers.insight_worker:main

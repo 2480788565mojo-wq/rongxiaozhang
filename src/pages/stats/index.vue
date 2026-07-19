@@ -1,299 +1,133 @@
 <template>
-	<view class="page-stats">
-		<!-- 顶部标题和月份选择 -->
-		<view class="header">
-			<text class="title">统计报表</text>
-			<picker mode="date" fields="month" :value="selYear + '-' + String(selMonth).padStart(2, '0')" @change="onMonthChange">
-			<view class="month-select">
-				<text>{{ currentMonth }}</text>
-				<text class="arrow">▼</text>
-			</view>
-			</picker>
-		</view>
+  <view class="page">
+    <view class="header">
+      <view><text class="title">收支统计</text><text class="subtitle">清晰了解每一笔变化</text></view>
+      <view class="month-chip"><u-icon name="calendar" color="#4A90E2" size="15" /><text>{{ currentMonth }}</text></view>
+    </view>
 
-		<!-- 本月收支统计摘要 -->
-		<view class="stats-summary">
-			<view class="stat-box">
-				<text class="stat-label">本月支出</text>
-				<text class="stat-value expense">¥{{ totalExpense.toFixed(2) }}</text>
-			</view>
-			<view class="stat-box">
-				<text class="stat-label">本月收入</text>
-				<text class="stat-value income">¥{{ totalIncome.toFixed(2) }}</text>
-			</view>
-			<view class="stat-box" v-if="lastExpense > 0">
-				<text class="stat-label">环比上月</text>
-				<text class="stat-value" :class="compareColor">{{ compareText }}</text>
-			</view>
-		</view>
+    <view class="balance-card card">
+      <view class="balance-head"><text>本月结余</text><view class="balance-icon"><u-icon name="rmb-circle" color="#4A90E2" size="22" /></view></view>
+      <text class="balance-value numeric">¥{{ overview.balance.toFixed(2) }}</text>
+    </view>
 
-		<!-- 月度收支趋势折线图 -->
-		<view class="chart-card">
-			<text class="chart-title">月度收支趋势</text>
-			<canvas canvas-id="trendCanvas" id="trendCanvas" class="chart-canvas"></canvas>
-		</view>
+    <view class="summary-grid">
+      <view class="summary-card card expense-card">
+        <text class="summary-label">本月支出</text>
+        <text class="summary-value numeric">¥{{ overview.expense.toFixed(2) }}</text>
+      </view>
+      <view class="summary-card card income-card">
+        <text class="summary-label">本月收入</text>
+        <text class="summary-value numeric">¥{{ overview.income.toFixed(2) }}</text>
+      </view>
+    </view>
 
-		<!-- 支出分类占比饼图 -->
-		<view class="chart-card">
-			<text class="chart-title">支出分类占比</text>
-			<canvas canvas-id="pieCanvas" id="pieCanvas" class="chart-canvas"></canvas>
-		</view>
+    <view class="chart-section card">
+      <view class="section-heading"><view><text class="section-title">收支趋势</text><text class="section-subtitle">近 12 个月</text></view><view class="heading-icon blue"><u-icon name="level" color="#4A90E2" size="20" /></view></view>
+      <TrendLine v-if="trend.length" :data="trend" />
+      <view v-else class="empty-state"><u-icon name="level" color="#B0B0B5" size="28" /><text>暂无趋势数据</text></view>
+    </view>
 
-		<!-- 本月支出 TOP5 排行 -->
-		<view class="top5-card">
-			<text class="chart-title">本月支出TOP{{ top5.length }}</text>
-			<view class="top-item" v-for="(item, index) in top5" :key="index">
-				<text class="top-rank">{{ index + 1 }}</text>
-				<text class="top-name">{{ item.name }}</text>
-				<view class="top-bar-bg">
-					<view class="top-bar" :style="{ width: item.percent + '%' }"></view>
-				</view>
-				<text class="top-amount">¥{{ item.amount.toFixed(2) }}</text>
-			</view>
-			<view class="empty-tip" v-if="top5.length === 0"><text>本月暂无支出</text></view>
-		</view>
-		<FabBtn />
-	</view>
+    <view class="chart-section card">
+      <view class="section-heading"><view><text class="section-title">分类占比</text><text class="section-subtitle">本月支出构成</text></view><view class="heading-icon orange"><u-icon name="grid" color="#FF9F0A" size="20" /></view></view>
+      <CategoryPie v-if="categories.length" :data="categories" />
+      <view v-else class="empty-state"><u-icon name="grid" color="#B0B0B5" size="28" /><text>本月暂无支出</text></view>
+    </view>
+
+    <view class="ranking card">
+      <view class="section-heading"><view><text class="section-title">分类排行</text><text class="section-subtitle">支出金额前五名</text></view><view class="heading-icon green"><u-icon name="list" color="#34C759" size="20" /></view></view>
+      <view v-for="(item, index) in categories.slice(0, 5)" :key="item.category" class="rank-row">
+        <view class="rank">{{ index + 1 }}</view>
+        <text class="name">{{ item.category }}</text>
+        <text class="rank-percent numeric">{{ item.percentage.toFixed(1) }}%</text>
+        <text class="rank-amount numeric">¥{{ item.amount.toFixed(2) }}</text>
+      </view>
+      <view v-if="!categories.length" class="empty-state compact"><u-icon name="order" color="#B0B0B5" size="28" /><text>暂无分类排行</text></view>
+    </view>
+
+    <navigator class="ai-card card" url="/pages/insights/index" hover-class="pressable">
+      <view class="ai-icon"><u-icon name="chat" color="#7D6EE8" size="23" /></view>
+      <view class="ai-copy"><text class="section-title">AI 消费分析</text><text class="section-subtitle">查看本月消费洞察</text></view>
+      <u-icon name="arrow-right" color="#C7C7CC" size="18" />
+    </navigator>
+    <FabBtn />
+  </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue';
-import { getMonthlyStats, getCategoryStats, getTrendData } from '@/utils/store';
-import { onShow } from '@dcloudio/uni-app';
-import FabBtn from '@/components/FabBtn.vue';
+import { computed, reactive, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+import FabBtn from "@/components/FabBtn.vue";
+import TrendLine from "@/components/charts/TrendLine.vue";
+import CategoryPie from "@/components/charts/CategoryPie.vue";
+import { getCategoryStats, getOverview, getTrend } from "@/api/stats";
+import { useLedgerStore } from "@/stores/ledger";
+import type { CategoryStat, TrendPoint } from "@/types";
 
-const now = new Date();
-const selYear = ref(now.getFullYear());
-const selMonth = ref(now.getMonth() + 1);
-const currentMonth = computed(() => selYear.value + '年' + selMonth.value + '月');
+const ledgerStore = useLedgerStore();
+const year = ref(0);
+const month = ref(0);
+const currentMonth = computed(() => `${year.value}年${month.value}月`);
+const overview = reactive({ expense: 0, income: 0, balance: 0 });
+const trend = ref<TrendPoint[]>([]);
+const categories = ref<CategoryStat[]>([]);
 
-const totalExpense = ref(0);
-const totalIncome = ref(0);
-const lastExpense = ref(0);
-const compareText = ref('');
-const compareColor = ref('');
-const top5 = ref<{name: string; amount: number; percent: number}[]>([]);
-
-// 加载统计数据：当月收支、环比上月对比、分类排行
-function loadData() {
-	const stats = getMonthlyStats(selYear.value, selMonth.value);
-	totalExpense.value = stats.expense;
-	totalIncome.value = stats.income;
-
-	// 计算环比上月的变化百分比
-	let lastM = selMonth.value - 1;
-	let lastY = selYear.value;
-	if (lastM === 0) { lastM = 12; lastY--; }
-	const last = getMonthlyStats(lastY, lastM);
-	lastExpense.value = last.expense;
-
-	if (last.expense > 0) {
-		const diff = ((stats.expense - last.expense) / last.expense * 100);
-		compareText.value = (diff > 0 ? '+' : '') + diff.toFixed(1) + '%';
-		compareColor.value = diff > 0 ? 'expense' : 'income'; // 支出增加标红，减少标绿
-	}
-
-	// 支出分类排行（取前5）
-	const catStats = getCategoryStats(selYear.value, selMonth.value);
-	if (catStats.length > 0) {
-		const maxAmount = catStats[0].amount;
-		top5.value = catStats.slice(0, 5).map(c => ({
-			name: c.name,
-			amount: c.amount,
-			percent: Math.round((c.amount / maxAmount) * 100),
-		}));
-	} else {
-		top5.value = [];
-	}
-
-	nextTick(() => resizeAndDraw());
+async function load() {
+  const now = new Date();
+  year.value = now.getFullYear();
+  month.value = now.getMonth() + 1;
+  if (!ledgerStore.currentId) await ledgerStore.fetchLedgers();
+  if (!ledgerStore.currentId) return;
+  const [summary, trendResponse, categoryResponse] = await Promise.all([
+    getOverview(ledgerStore.currentId, year.value, month.value),
+    getTrend(ledgerStore.currentId, 12),
+    getCategoryStats(ledgerStore.currentId, year.value, month.value),
+  ]);
+  overview.expense = summary.expense;
+  overview.income = summary.income;
+  overview.balance = summary.balance;
+  trend.value = trendResponse.items;
+  categories.value = categoryResponse.items;
 }
-
-// 调整画布尺寸并重新绘制图表
-function resizeAndDraw() {
-	['trendCanvas', 'pieCanvas'].forEach((id) => {
-		const canvas = document.querySelector('[canvas-id="' + id + '"]') as HTMLCanvasElement | null;
-		if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
-			canvas.width = canvas.clientWidth;
-			canvas.height = canvas.clientHeight;
-		}
-	});
-	drawTrend();
-	drawPie();
-}
-
-// 绘制月度收支趋势折线图
-function drawTrend() {
-	const canvas = document.querySelector('[canvas-id="trendCanvas"]') as HTMLCanvasElement | null;
-	if (!canvas) return;
-	const ctx = uni.createCanvasContext('trendCanvas');
-
-	const w = canvas.width;
-	const h = canvas.height;
-	const pad = { top: 40, bottom: 30, left: 45, right: 25 };
-	const cw = w - pad.left - pad.right;
-	const ch = h - pad.top - pad.bottom;
-
-	const data = getTrendData();
-	const allVals = [...data.map(d => d.expense), ...data.map(d => d.income)];
-	const maxV = Math.max(...allVals, 1);
-	const ceiling = Math.ceil(maxV / 1000) * 1000 || 1000;
-
-	// 绘制网格线
-	for (let i = 0; i <= 4; i++) {
-		const y = pad.top + (ch / 4) * i;
-		ctx.beginPath();
-		ctx.moveTo(pad.left, y);
-		ctx.lineTo(w - pad.right, y);
-		ctx.setStrokeStyle('#ddd');
-		ctx.setLineWidth(1);
-		ctx.stroke();
-		ctx.setFontSize(10);
-		ctx.setFillStyle('#999');
-		ctx.fillText(String(Math.round((ceiling / 4) * (4 - i))), 2, y + 3);
-	}
-
-	// 绘制一条折线
-	function drawLine(vals: number[], color: string) {
-		ctx.beginPath();
-		ctx.setStrokeStyle(color);
-		ctx.setLineWidth(3);
-		vals.forEach((v, i) => {
-			const x = pad.left + (cw / (data.length - 1 || 1)) * i;
-			const y = pad.top + ch - (v / ceiling) * ch;
-			i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-		});
-		ctx.stroke();
-
-		// 绘制数据点
-		vals.forEach((v, i) => {
-			const x = pad.left + (cw / (data.length - 1 || 1)) * i;
-			const y = pad.top + ch - (v / ceiling) * ch;
-			ctx.beginPath();
-			ctx.arc(x, y, 4, 0, Math.PI * 2);
-			ctx.setFillStyle(color);
-			ctx.fill();
-			ctx.beginPath();
-			ctx.arc(x, y, 2, 0, Math.PI * 2);
-			ctx.setFillStyle('#fff');
-			ctx.fill();
-		});
-	}
-
-	drawLine(data.map(d => d.expense), '#1a5cc8');
-	drawLine(data.map(d => d.income), '#2e8b57');
-
-	// X轴月份标签
-	ctx.setFontSize(10);
-	ctx.setFillStyle('#666');
-	data.forEach((d, i) => {
-		const x = pad.left + (cw / (data.length - 1 || 1)) * i;
-		ctx.fillText(d.month, x - 8, pad.top + ch + 16);
-	});
-
-	// 图例：蓝色=支出 绿色=收入
-	ctx.setFillStyle('#1a5cc8');
-	ctx.fillRect(w - 90, 10, 14, 14);
-	ctx.setFillStyle('#333');
-	ctx.setFontSize(11);
-	ctx.fillText('支出', w - 72, 22);
-	ctx.setFillStyle('#2e8b57');
-	ctx.fillRect(w - 35, 10, 14, 14);
-	ctx.fillText('收入', w - 17, 22);
-
-	ctx.draw();
-}
-
-// 绘制支出分类占比饼图
-function drawPie() {
-	const canvas = document.querySelector('[canvas-id="pieCanvas"]') as HTMLCanvasElement | null;
-	if (!canvas) return;
-	const ctx = uni.createCanvasContext('pieCanvas');
-
-	const w = canvas.width;
-	const h = canvas.height;
-	const catStats = getCategoryStats(selYear.value, selMonth.value);
-	const colors = ['#2979ff','#5b8ff9','#f0ad4e','#4cd964','#dd524d','#b0bec5','#9c27b0','#ff7043','#26a69a','#78909c'];
-
-	if (catStats.length === 0) {
-		ctx.setFontSize(14);
-		ctx.setFillStyle('#ccc');
-		ctx.fillText('暂无数据', w / 2 - 30, h / 2);
-		ctx.draw();
-		return;
-	}
-
-	const total = catStats.reduce((s, d) => s + d.amount, 0);
-	const cx = w * 0.3, cy = h / 2, r = Math.min(w, h) * 0.3;
-	let start = -Math.PI / 2;
-
-	// 绘制每个分类的扇形
-	catStats.forEach((d, i) => {
-		const angle = (d.amount / total) * Math.PI * 2;
-		ctx.beginPath();
-		ctx.moveTo(cx, cy);
-		ctx.arc(cx, cy, r, start, start + angle);
-		ctx.closePath();
-		ctx.setFillStyle(colors[i % colors.length]);
-		ctx.fill();
-		start += angle;
-	});
-
-	// 右侧图例（最多显示6个）
-	const lx = w * 0.65;
-	let ly = 15;
-	const show = catStats.slice(0, 6);
-	show.forEach((d, i) => {
-		ctx.setFillStyle(colors[i % colors.length]);
-		ctx.fillRect(lx, ly, 14, 14);
-		ctx.setFontSize(11);
-		ctx.setFillStyle('#333');
-		ctx.fillText(d.name, lx + 18, ly + 12);
-		ctx.setFillStyle('#999');
-		ctx.fillText(Math.round((d.amount / total) * 100) + '%', lx + 18, ly + 26);
-		ly += 48;
-	});
-
-	ctx.draw();
-}
-
-onShow(() => { loadData(); });
-loadData();
+onShow(() => void load());
 </script>
 
-<style lang="scss" scoped>
-.page-stats { padding: 20rpx 30rpx 120rpx; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30rpx; }
-.title { font-size: 32rpx; font-weight: bold; }
-.month-select { font-size: 26rpx; color: #999; }
-.arrow { font-size: 20rpx; margin-left: 8rpx; }
-
-.stats-summary {
-	display: flex; background: #fff; border-radius: 20rpx; padding: 30rpx;
-	margin-bottom: 20rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
-}
-.stat-box { flex: 1; text-align: center; }
-.stat-label { font-size: 22rpx; color: #999; display: block; margin-bottom: 8rpx; }
-.stat-value { font-size: 32rpx; font-weight: bold; display: block; }
-.stat-value.expense { color: #333; }
-.stat-value.income { color: #4cd964; }
-
-.chart-card, .top5-card {
-	background: #fff; border-radius: 20rpx; padding: 30rpx;
-	margin-bottom: 20rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
-}
-.chart-title { font-size: 28rpx; font-weight: bold; display: block; margin-bottom: 20rpx; }
-.chart-canvas { width: 100%; height: 700rpx; }
-
-.top-item { display: flex; align-items: center; margin-bottom: 16rpx; }
-.top-rank {
-	width: 36rpx; height: 36rpx; border-radius: 50%;
-	background: #f5f5f5; display: flex; align-items: center;
-	justify-content: center; font-size: 22rpx; color: #999; margin-right: 16rpx;
-}
-.top-name { width: 140rpx; font-size: 26rpx; }
-.top-bar-bg { flex: 1; height: 24rpx; background: #f5f5f5; border-radius: 12rpx; margin: 0 16rpx; overflow: hidden; }
-.top-bar { height: 100%; background: linear-gradient(90deg, #2979ff, #5b8ff9); border-radius: 12rpx; }
-.top-amount { font-size: 26rpx; color: #333; width: 100rpx; text-align: right; }
-.empty-tip { text-align: center; padding: 40rpx; color: #ccc; font-size: 26rpx; }
+<style scoped>
+.page { min-height: 100vh; padding: 24rpx 28rpx 160rpx; box-sizing: border-box; }
+.card { border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.header, .month-chip, .balance-head, .section-heading, .ai-card { display: flex; align-items: center; }
+.header, .balance-head, .section-heading { justify-content: space-between; }
+.header > view:first-child, .section-heading > view:first-child { display: flex; min-width: 0; flex-direction: column; }
+.title { font-size: 44rpx; font-weight: 600; }
+.subtitle { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 24rpx; }
+.month-chip { gap: 8rpx; padding: 12rpx 16rpx; border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-primary-soft); font-size: 22rpx; }
+.balance-card { margin-top: 32rpx; padding: 34rpx; }
+.balance-head { color: var(--color-text-secondary); font-size: 26rpx; }
+.balance-icon { display: flex; align-items: center; justify-content: center; width: 68rpx; height: 68rpx; border-radius: 22rpx; background: var(--color-primary-soft); }
+.balance-value { display: block; margin-top: 24rpx; overflow: hidden; font-size: 58rpx; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; margin-top: 16rpx; }
+.summary-card { display: flex; min-width: 0; min-height: 138rpx; padding: 26rpx; box-sizing: border-box; flex-direction: column; justify-content: space-between; }
+.summary-label { color: var(--color-text-secondary); font-size: 24rpx; }
+.summary-value { display: block; overflow: hidden; margin-top: 18rpx; font-size: 30rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.expense-card .summary-value { color: var(--color-danger); }
+.income-card .summary-value { color: var(--color-success); }
+.chart-section, .ranking { margin-top: 16rpx; padding: 30rpx; }
+.section-heading { margin-bottom: 16rpx; }
+.section-title { display: block; font-size: 32rpx; font-weight: 600; }
+.section-subtitle { margin-top: 5rpx; color: var(--color-text-secondary); font-size: 23rpx; }
+.heading-icon { display: flex; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; border-radius: 22rpx; }
+.heading-icon.blue { background: var(--color-primary-soft); }
+.heading-icon.orange { background: #fff4df; }
+.heading-icon.green { background: #eaf8ee; }
+.rank-row { display: grid; grid-template-columns: 54rpx minmax(0, 1fr) 90rpx 170rpx; align-items: center; min-height: 88rpx; border-bottom: 1rpx solid var(--color-border-muted); }
+.rank-row:last-of-type { border-bottom: 0; }
+.rank { display: flex; align-items: center; justify-content: center; width: 40rpx; height: 40rpx; border-radius: 14rpx; color: var(--color-primary); background: var(--color-primary-soft); font-size: 22rpx; font-weight: 600; }
+.name { overflow: hidden; font-size: 26rpx; text-overflow: ellipsis; white-space: nowrap; }
+.rank-percent { color: var(--color-text-secondary); font-size: 23rpx; text-align: right; }
+.rank-amount { overflow: hidden; margin-left: 12rpx; font-size: 25rpx; font-weight: 600; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.empty-state { display: flex; min-height: 360rpx; flex-direction: column; align-items: center; justify-content: center; gap: 14rpx; color: var(--color-text-secondary); font-size: 24rpx; }
+.empty-state.compact { min-height: 150rpx; }
+.ai-card { gap: 20rpx; margin-top: 16rpx; padding: 28rpx 30rpx; transition: transform var(--transition-fast), opacity var(--transition-fast); }
+.ai-icon { display: flex; align-items: center; justify-content: center; width: 70rpx; height: 70rpx; flex: none; border-radius: 24rpx; background: var(--color-accent-soft); }
+.ai-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.pressable { opacity: .82; transform: scale(.97); }
 </style>
