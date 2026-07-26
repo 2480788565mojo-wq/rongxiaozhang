@@ -9,8 +9,6 @@ declare module '*.vue' {
 
 declare module 'uview-plus';
 
-declare function requirePlugin(name: string): any;
-
 // Tests run in Vitest's Node host, but the app intentionally does not depend
 // on the full Node type package. Keep the small read-only surface typed here.
 declare module "node:fs" {

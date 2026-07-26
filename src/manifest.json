@@ -42,17 +42,6 @@
         "setting" : {
             "urlCheck" : true
         },
-        "permission" : {
-            "scope.record" : {
-                "desc" : "用于语音记账，将说话内容实时转换为文字"
-            }
-        },
-        "plugins" : {
-            "WechatSI" : {
-                "version" : "0.3.5",
-                "provider" : "wx069ba97219f66d99"
-            }
-        },
         "usingComponents" : true
     },
     "mp-alipay" : {

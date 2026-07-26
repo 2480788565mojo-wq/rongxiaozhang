@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
-from app.api.deps import CurrentUser, DBSession
+from app.api.deps import CurrentUser, DBSession, require_ledger_access
 from app.models import CategoryType
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
-from app.services.bill_service import get_accessible_ledger
 from app.services.category_service import (
     create_category,
     delete_category,
@@ -16,13 +15,6 @@ from app.services.category_service import (
 router = APIRouter()
 
 
-async def _require_access(db: DBSession, ledger_id: int, user_id: int) -> None:
-    try:
-        await get_accessible_ledger(db, ledger_id, user_id)
-    except PermissionError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "账本不存在或无权访问") from exc
-
-
 @router.get("", response_model=list[CategoryOut])
 async def read_categories(
     user: CurrentUser,
@@ -30,7 +22,7 @@ async def read_categories(
     ledger_id: int = Query(default=1, gt=0),
     type: str | None = Query(default=None, pattern="^(expense|income)$"),
 ) -> list[CategoryOut]:
-    await _require_access(db, ledger_id, user.id)
+    await require_ledger_access(db, ledger_id, user.id)
     category_type = CategoryType(type) if type else None
     categories = await list_categories(db, user.id, ledger_id, category_type)
     return [CategoryOut.model_validate(category) for category in categories]
@@ -42,7 +34,7 @@ async def add_category(
     user: CurrentUser,
     db: DBSession,
 ) -> CategoryOut:
-    await _require_access(db, payload.ledger_id, user.id)
+    await require_ledger_access(db, payload.ledger_id, user.id)
     try:
         category = await create_category(db, user.id, payload)
     except ValueError as exc:

@@ -168,13 +168,7 @@ describe('云端首页', () => {
 })
 
 describe('语音记账页面', () => {
-  it('表单重置后忽略迟到的微信语音停止回调', async () => {
-    const manager: any = {
-      start: vi.fn(),
-      stop: vi.fn(),
-    }
-    vi.stubGlobal('requirePlugin', vi.fn(() => ({ getRecordRecognitionManager: () => manager })))
-    vi.mocked(uni.authorize).mockImplementation((options: any) => options.success?.())
+  it('微信端点击语音按钮时提示当前版本暂不支持', async () => {
     const { useUserStore } = await import('@/stores/user')
     const { useLedgerStore } = await import('@/stores/ledger')
     const pinia = activatePinia()
@@ -184,21 +178,12 @@ describe('语音记账页面', () => {
     const wrapper = await mountPage('./transcribe/index.vue', pinia)
     await wrapper.find('.speech-input').setValue('原文')
     await wrapper.find('.voice-button').trigger('click')
-    expect(manager.start).toHaveBeenCalled()
-    manager.onStart?.()
-    manager.onRecognize?.({ result: '午饭28元' })
     await flushPromises()
-    expect((wrapper.find('.speech-input').element as HTMLTextAreaElement).value).toContain('午饭28元')
-    const resetForm = (wrapper.vm as any).$?.setupState?.resetForm
-    expect(resetForm).toBeTypeOf('function')
-    resetForm()
-    await flushPromises()
-    manager.onStop?.({ result: '迟到的识别结果' })
-    await flushPromises()
-    expect((wrapper.find('.speech-input').element as HTMLTextAreaElement).value).toBe('')
+    expect(uni.showToast).toHaveBeenCalledWith({ title: '当前版本暂不支持语音输入', icon: 'none' })
+    expect(uni.authorize).not.toHaveBeenCalled()
+    expect((wrapper.find('.speech-input').element as HTMLTextAreaElement).value).toBe('原文')
     expect(wrapper.find('.voice-status').exists()).toBe(false)
     wrapper.unmount()
-    delete (globalThis as any).requirePlugin
   })
 })
 

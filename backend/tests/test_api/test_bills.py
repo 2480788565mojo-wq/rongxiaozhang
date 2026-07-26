@@ -66,11 +66,38 @@ class FakeGraph:
         }
 
 
+class FakeAdviceGraph:
+    def get_state(self, _config):
+        return SimpleNamespace(values={})
+
+    async def astream(self, _state, _config):
+        yield {
+            "advisor": {
+                "intent": "advice",
+                "advisor_recommendation": {
+                    "summary": "本月餐饮支出有所上升",
+                    "actions": ["查看月度消费洞察"],
+                },
+            }
+        }
+
+
+class FakeRiskCheckpointGraph:
+    def get_state(self, _config):
+        return SimpleNamespace(
+            values={
+                "route_mode": "deep",
+                "ai_risk_level": "warning",
+                "guardian_opinion": {"assessment": "AI 检测到异常消费"},
+            }
+        )
+
+
 @pytest.mark.asyncio
 async def test_transcribe_waits_for_confirmation(monkeypatch):
     monkeypatch.setattr(
         bills_api,
-        "_require_ledger",
+        "require_ledger_access",
         AsyncMock(return_value=(SimpleNamespace(type=LedgerType.PERSONAL), None)),
     )
     monkeypatch.setattr(bills_api, "get_compiled_graph", lambda: FakeGraph())
@@ -93,10 +120,49 @@ async def test_transcribe_waits_for_confirmation(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_transcribe_returns_advisor_message_for_advice_intent(monkeypatch):
+    monkeypatch.setattr(
+        bills_api,
+        "require_ledger_access",
+        AsyncMock(return_value=(SimpleNamespace(type=LedgerType.PERSONAL), None)),
+    )
+    monkeypatch.setattr(bills_api, "get_compiled_graph", lambda: FakeAdviceGraph())
+    monkeypatch.setattr(bills_api, "require_rate_limits", AsyncMock())
+    monkeypatch.setattr(bills_api, "clear_transaction_session", AsyncMock())
+    monkeypatch.setattr(
+        bills_api,
+        "get_overview",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                income=5000,
+                expense=3200,
+                balance=1800,
+                budget_used_percentage=80,
+            )
+        ),
+    )
+    monkeypatch.setattr(bills_api, "get_category_stats", AsyncMock(return_value=([], 0)))
+
+    response = await bills_api.transcribe_bill(
+        TranscribeRequest(text="这个月我花多了吗？", ledger_id=1),
+        SimpleNamespace(id=1),
+        AsyncMock(),
+        AsyncMock(),
+    )
+    chunks = []
+    async for chunk in response.body_iterator:
+        chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+    body = "".join(chunks)
+
+    assert "event: advice" in body
+    assert "本月餐饮支出有所上升" in body
+
+
+@pytest.mark.asyncio
 async def test_confirm_returns_conflict_before_warning_is_forced(monkeypatch):
     monkeypatch.setattr(
         bills_api,
-        "_require_ledger",
+        "require_ledger_access",
         AsyncMock(return_value=(SimpleNamespace(type=LedgerType.PERSONAL), None)),
     )
 
@@ -106,7 +172,7 @@ async def test_confirm_returns_conflict_before_warning_is_forced(monkeypatch):
         return state
 
     create_bill = AsyncMock()
-    monkeypatch.setattr(bills_api, "guardian_node", warning_guardian)
+    monkeypatch.setattr(bills_api, "guardian_budget_node", warning_guardian)
     monkeypatch.setattr(bills_api, "lock_user_for_billing", AsyncMock())
     monkeypatch.setattr(
         bills_api,
@@ -129,11 +195,48 @@ async def test_confirm_returns_conflict_before_warning_is_forced(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_confirm_preserves_stricter_ai_risk_from_server_checkpoint(monkeypatch):
+    monkeypatch.setattr(
+        bills_api,
+        "require_ledger_access",
+        AsyncMock(return_value=(SimpleNamespace(type=LedgerType.PERSONAL), None)),
+    )
+    monkeypatch.setattr(bills_api, "get_compiled_graph", lambda: FakeRiskCheckpointGraph())
+    monkeypatch.setattr(bills_api, "lock_user_for_billing", AsyncMock())
+    monkeypatch.setattr(
+        bills_api,
+        "get_bill_by_confirmation_session",
+        AsyncMock(return_value=None),
+    )
+
+    async def safe_budget(state, db=None):
+        state["risk_level"] = "safe"
+        state["budget_check"] = None
+        return state
+
+    create_bill = AsyncMock()
+    monkeypatch.setattr(bills_api, "guardian_budget_node", safe_budget)
+    monkeypatch.setattr(bills_api, "create_bill_from_parsed", create_bill)
+    monkeypatch.setattr(bills_api, "publish_user_event", AsyncMock())
+
+    response = await bills_api.confirm_bill(
+        confirm_request(),
+        SimpleNamespace(id=1),
+        AsyncMock(),
+        AsyncMock(),
+    )
+
+    assert response.status_code == 409
+    assert json.loads(response.body)["status"] == "warning"
+    create_bill.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_repeated_confirmation_returns_existing_bill(monkeypatch):
     existing = bill_record()
     monkeypatch.setattr(
         bills_api,
-        "_require_ledger",
+        "require_ledger_access",
         AsyncMock(return_value=(SimpleNamespace(type=LedgerType.PERSONAL), None)),
     )
     lock = AsyncMock()
@@ -163,7 +266,7 @@ async def test_notification_failure_does_not_turn_saved_bill_into_failure(monkey
     saved = bill_record(2)
     monkeypatch.setattr(
         bills_api,
-        "_require_ledger",
+        "require_ledger_access",
         AsyncMock(return_value=(SimpleNamespace(type=LedgerType.PERSONAL), None)),
     )
     monkeypatch.setattr(bills_api, "lock_user_for_billing", AsyncMock())
@@ -178,7 +281,7 @@ async def test_notification_failure_does_not_turn_saved_bill_into_failure(monkey
         return state
 
     create_bill = AsyncMock(return_value=saved)
-    monkeypatch.setattr(bills_api, "guardian_node", safe_guardian)
+    monkeypatch.setattr(bills_api, "guardian_budget_node", safe_guardian)
     monkeypatch.setattr(bills_api, "create_bill_from_parsed", create_bill)
     monkeypatch.setattr(
         bills_api,

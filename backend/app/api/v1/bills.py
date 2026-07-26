@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -12,9 +13,10 @@ from app.agents.graph import (
     get_compiled_graph,
     prepare_transaction_config,
 )
-from app.agents.guardian import guardian_node
+from app.agents.guardian import guardian_budget_node, stricter_risk
+from app.agents.orchestrator import looks_like_advice_request
 from app.agents.state import new_transaction_state
-from app.api.deps import CurrentUser, DBSession, RedisClient
+from app.api.deps import CurrentUser, DBSession, RedisClient, require_ledger_access
 from app.api.rate_limit import require_rate_limits
 from app.api.v1.sse import publish_user_event
 from app.models import LedgerRole, LedgerType
@@ -32,7 +34,6 @@ from app.services.bill_service import (
     can_manage_bill,
     create_bill_from_parsed,
     delete_bill,
-    get_accessible_ledger,
     get_bill_by_confirmation_session,
     get_bill_with_access,
     get_bills_paginated,
@@ -40,6 +41,7 @@ from app.services.bill_service import (
     update_bill,
 )
 from app.services.ledger_service import get_ledger_member_ids
+from app.services.stats_service import get_category_stats, get_overview
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -49,16 +51,6 @@ settings = get_settings()
 def _sse_message(event: str, data: dict[str, Any]) -> str:
     payload = json.dumps(data, ensure_ascii=False, default=str)
     return f"event: {event}\ndata: {payload}\n\n"
-
-
-async def _require_ledger(db: DBSession, ledger_id: int, user_id: int):
-    try:
-        return await get_accessible_ledger(db, ledger_id, user_id)
-    except PermissionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="账本不存在或无权访问",
-        ) from exc
 
 
 @router.post("/transcribe")
@@ -74,7 +66,7 @@ async def transcribe_bill(
         RateLimitRule("minute", settings.AI_TRANSCRIBE_LIMIT_PER_MINUTE, 60),
         RateLimitRule("day", settings.AI_TRANSCRIBE_LIMIT_PER_DAY, 86400),
     )
-    ledger, _ = await _require_ledger(db, request.ledger_id, user.id)
+    ledger, _ = await require_ledger_access(db, request.ledger_id, user.id)
     try:
         graph = get_compiled_graph()
     except RuntimeError as exc:
@@ -98,6 +90,34 @@ async def transcribe_bill(
         ledger_id=request.ledger_id,
         session_id=session_id,
     )
+    if looks_like_advice_request(request.text):
+        try:
+            today = date.today()
+            overview = await get_overview(
+                db,
+                user_id=user.id,
+                ledger_id=request.ledger_id,
+                year=today.year,
+                month=today.month,
+            )
+            categories, _ = await get_category_stats(
+                db,
+                ledger_id=request.ledger_id,
+                year=today.year,
+                month=today.month,
+            )
+            state["context_memory"] = {
+                "financial_snapshot": {
+                    "period": f"{today.year:04d}-{today.month:02d}",
+                    "income": overview.income,
+                    "expense": overview.expense,
+                    "balance": overview.balance,
+                    "budget_used_percentage": overview.budget_used_percentage,
+                    "top_categories": [item.model_dump() for item in categories[:5]],
+                }
+            }
+        except Exception:
+            logger.warning("咨询统计快照加载失败，Advisor 将使用无数据降级建议", exc_info=True)
     state.update(
         {
             "raw_input": request.text,
@@ -111,8 +131,21 @@ async def transcribe_bill(
 
     async def event_stream() -> AsyncIterator[str]:
         parsed_ready = False
+        transaction_advice: dict[str, Any] | None = None
         async for event in graph.astream(state, config):
             for node_name, node_state in event.items():
+                if node_name == "advisor":
+                    recommendation = node_state.get("advisor_recommendation") or {}
+                    advice_payload = {
+                        "summary": recommendation.get("summary", "暂时无法生成分析建议"),
+                        "actions": recommendation.get("actions", []),
+                        "session_id": session_id,
+                    }
+                    if node_state.get("intent") == "advice":
+                        yield _sse_message("advice", advice_payload)
+                        await clear_transaction_session(user.id, request.ledger_id, session_id)
+                        return
+                    transaction_advice = advice_payload
                 if node_name != "parser":
                     continue
                 if node_state.get("parsed"):
@@ -145,7 +178,10 @@ async def transcribe_bill(
         if parsed_ready:
             yield _sse_message(
                 "awaiting_confirmation",
-                {"session_id": session_id},
+                {
+                    "session_id": session_id,
+                    "advice": transaction_advice,
+                },
             )
 
     return StreamingResponse(
@@ -166,7 +202,7 @@ async def confirm_bill(
     db: DBSession,
     redis: RedisClient,
 ) -> BillOut | JSONResponse:
-    ledger, _ = await _require_ledger(db, request.ledger_id, user.id)
+    ledger, _ = await require_ledger_access(db, request.ledger_id, user.id)
     await lock_user_for_billing(db, user.id)
     existing = await get_bill_by_confirmation_session(
         db,
@@ -202,6 +238,30 @@ async def confirm_bill(
         ledger_id=request.ledger_id,
         session_id=request.session_id,
     )
+    try:
+        graph = get_compiled_graph()
+        config = prepare_transaction_config(
+            graph,
+            user.id,
+            request.ledger_id,
+            request.session_id,
+        )
+        checkpoint = graph.get_state(config)
+        checkpoint_state = dict(checkpoint.values) if checkpoint.values else {}
+        if checkpoint_state.get("route_mode") in {"quick", "standard", "deep"}:
+            state["route_mode"] = checkpoint_state["route_mode"]
+        if checkpoint_state.get("ai_risk_level") in {"safe", "warning", "blocked"}:
+            state["ai_risk_level"] = checkpoint_state["ai_risk_level"]
+        state["guardian_opinion"] = checkpoint_state.get("guardian_opinion")
+        state["route_reason"] = checkpoint_state.get("route_reason")
+        state["agent_messages"] = list(checkpoint_state.get("agent_messages") or [])[-20:]
+        state["context_memory"] = {
+            key: str(value)[:120]
+            for key, value in (checkpoint_state.get("context_memory") or {}).items()
+            if key in {"last_category", "last_account"}
+        }
+    except Exception:
+        logger.warning("未能恢复 Agent 会话上下文，继续使用标准确认流程", exc_info=True)
     state.update(
         {
             "parsed": parsed,
@@ -209,9 +269,21 @@ async def confirm_bill(
             "is_shared_ledger": ledger.type == LedgerType.SHARED,
         }
     )
-    state = await guardian_node(state, db=db)
-    risk_level = state.get("risk_level", "safe")
+    state = await guardian_budget_node(state, db=db)
+    rule_risk_level = state.get("risk_level", "safe")
+    ai_risk_level = state.get("ai_risk_level", "safe")
+    risk_level = stricter_risk(rule_risk_level, ai_risk_level)
+    state["rule_risk_level"] = rule_risk_level
+    state["risk_level"] = risk_level
     budget_check = state.get("budget_check")
+    if budget_check is not None:
+        budget_check.update(
+            {
+                "rule_risk_level": rule_risk_level,
+                "ai_risk_level": ai_risk_level,
+                "risk_level": risk_level,
+            }
+        )
 
     if risk_level in {"warning", "blocked"} and not request.force:
         event_data = budget_check or {"risk_level": risk_level}
@@ -263,7 +335,7 @@ async def list_bills(
     user: CurrentUser,
     db: DBSession,
 ) -> BillListResponse:
-    await _require_ledger(db, params.ledger_id, user.id)
+    await require_ledger_access(db, params.ledger_id, user.id)
     bills, total = await get_bills_paginated(
         db,
         params.ledger_id,

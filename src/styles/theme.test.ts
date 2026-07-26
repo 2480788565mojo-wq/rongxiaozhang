@@ -40,4 +40,9 @@ describe("Apple HIG 全局主题", () => {
   it("旧 CyberBackground 组件保持删除状态", () => {
     expect(existsSync(resolve(sourceRoot, "components/CyberBackground.vue"))).toBe(false);
   });
+
+  it("浏览器专用的减少动态效果样式不会进入微信 WXSS", () => {
+    const theme = read("styles/theme.css");
+    expect(theme).toMatch(/\/\* #ifdef H5 \*\/[\s\S]*@media \(prefers-reduced-motion: reduce\)[\s\S]*\/\* #endif \*\//);
+  });
 });

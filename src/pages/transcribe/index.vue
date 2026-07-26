@@ -38,7 +38,7 @@
           </view>
         </view>
 
-        <view v-if="sourceText && (parsing || clarificationQuestion || parsed)" class="message-row user">
+        <view v-if="sourceText && (parsing || clarificationQuestion || parsed || advisorMessage)" class="message-row user">
           <view class="message-bubble user-bubble"><text>{{ sourceText }}</text></view>
         </view>
 
@@ -54,6 +54,15 @@
           <view class="message-bubble assistant-bubble clarify-bubble">
             <text class="bubble-label">还需要一点信息</text>
             <text>{{ clarificationQuestion }}</text>
+          </view>
+        </view>
+
+        <view v-if="advisorMessage && !parsing" class="message-row assistant">
+          <image class="message-avatar" src="/static/logo.jpg" mode="aspectFill" />
+          <view class="message-bubble assistant-bubble clarify-bubble">
+            <text class="bubble-label">AI 理财顾问</text>
+            <text>{{ advisorMessage.summary }}</text>
+            <text v-for="action in advisorMessage.actions" :key="action">• {{ action }}</text>
           </view>
         </view>
 
@@ -116,8 +125,8 @@
             class="voice-button"
             :class="{ recording: voiceRecording }"
             :disabled="saving"
-            :aria-label="voiceRecording ? '停止语音输入' : '开始语音输入'"
-            :title="voiceRecording ? '停止语音输入' : '开始语音输入'"
+            :aria-label="voiceButtonLabel"
+            :title="voiceButtonLabel"
             @click="toggleVoiceInput"
           >
             <u-icon :name="voiceRecording ? 'close' : 'mic'" color="currentColor" size="22" />
@@ -152,6 +161,7 @@ const sourceText = ref("");
 const sessionId = ref("");
 const clarificationQuestion = ref("");
 const parsed = ref<ParsedBill | null>(null);
+const advisorMessage = ref<{ summary: string; actions: string[] } | null>(null);
 const parsing = ref(false);
 const saving = ref(false);
 const aaEnabled = ref(false);
@@ -162,14 +172,11 @@ let stream: SSEConnection | null = null;
 let speechBaseText = "";
 let speechDraftText = "";
 let h5Recognition: any = null;
-let wechatRecognitionManager: any = null;
 let speechSequence = 0;
 let speechRequest = 0;
 let activeSpeechSession = 0;
-let wechatPendingRequest = 0;
-let wechatSpeechSession = 0;
-let wechatStopping = false;
-let wechatAuthorizationPending = false;
+
+const voiceButtonLabel = computed(() => voiceRecording.value ? "停止语音输入" : "开始语音输入");
 
 const ledgerNames = computed(() => ledgerStore.ledgers.map((item) => item.name));
 const ledgerIndex = computed(() => Math.max(0, ledgerStore.ledgers.findIndex((item) => item.id === ledgerStore.currentId)));
@@ -204,7 +211,6 @@ function finishVoiceInput(finalText?: string, speechSession = activeSpeechSessio
   if (!speechSession || speechSession !== activeSpeechSession) return;
   if (finalText?.trim()) updateSpeechDraft(finalText, speechSession);
   activeSpeechSession = 0;
-  if (wechatSpeechSession === speechSession) wechatSpeechSession = 0;
   voiceRecording.value = false;
   voiceStatus.value = speechDraftText ? "语音已转成文字，可继续修改" : "";
 }
@@ -213,7 +219,6 @@ function handleVoiceError(code: string, speechSession = activeSpeechSession) {
   if (speechSession && speechSession !== activeSpeechSession) return;
   if (speechSession) {
     activeSpeechSession = 0;
-    if (wechatSpeechSession === speechSession) wechatSpeechSession = 0;
   }
   voiceRecording.value = false;
   voiceStatus.value = "";
@@ -281,77 +286,13 @@ function startH5VoiceInput() {
 // #endif
 
 // #ifdef MP-WEIXIN
-function ensureWechatRecognitionManager() {
-  if (wechatRecognitionManager) return wechatRecognitionManager;
-  const manager = requirePlugin("WechatSI").getRecordRecognitionManager();
-  manager.onStart = () => {
-    if (!wechatPendingRequest || wechatPendingRequest !== speechRequest) return;
-    wechatPendingRequest = 0;
-    const speechSession = beginSpeechSession();
-    wechatSpeechSession = speechSession;
-  };
-  manager.onRecognize = (result: any) => {
-    if (result?.result) updateSpeechDraft(result.result, wechatSpeechSession);
-  };
-  manager.onStop = (result: any) => {
-    wechatStopping = false;
-    const speechSession = wechatSpeechSession;
-    finishVoiceInput(result?.result || speechDraftText, speechSession);
-  };
-  manager.onError = (error: any) => {
-    wechatStopping = false;
-    const speechSession = wechatSpeechSession;
-    const pendingRequest = wechatPendingRequest;
-    wechatPendingRequest = 0;
-    if (speechSession || pendingRequest === speechRequest) {
-      handleVoiceError(String(error?.retcode || error?.errMsg || "unknown"), speechSession);
-    }
-  };
-  wechatRecognitionManager = manager;
-  return manager;
-}
-
 function startWechatVoiceInput() {
-  if (wechatStopping) {
-    uni.showToast({ title: "上一段语音正在结束，请稍候", icon: "none" });
-    return;
-  }
-  const requestId = ++speechRequest;
-  wechatAuthorizationPending = true;
-  voiceStatus.value = "正在请求麦克风权限…";
-  uni.authorize({
-    scope: "scope.record",
-    success: () => {
-      wechatAuthorizationPending = false;
-      if (requestId !== speechRequest) return;
-      try {
-        const manager = ensureWechatRecognitionManager();
-        wechatPendingRequest = requestId;
-        manager.start({ duration: 60000, lang: "zh_CN" });
-      } catch {
-        wechatPendingRequest = 0;
-        handleVoiceError("unknown", 0);
-      }
-    },
-    fail: () => {
-      wechatAuthorizationPending = false;
-      if (requestId !== speechRequest) return;
-      voiceStatus.value = "";
-      uni.showModal({
-        title: "需要麦克风权限",
-        content: "请在小程序设置中允许使用麦克风，才能使用语音记账。",
-        confirmText: "打开设置",
-        success: (result) => {
-          if (result.confirm) uni.openSetting({});
-        },
-      });
-    },
-  });
+  uni.showToast({ title: "当前版本暂不支持语音输入", icon: "none" });
 }
 // #endif
 
 function startVoiceInput() {
-  if (activeSpeechSession || h5Recognition || wechatAuthorizationPending || wechatPendingRequest || wechatStopping) return;
+  if (activeSpeechSession || h5Recognition) return;
   // #ifdef H5
   startH5VoiceInput();
   // #endif
@@ -368,30 +309,21 @@ function startVoiceInput() {
 function stopVoiceInput(showStatus = true) {
   const speechSession = activeSpeechSession;
   const recognition = h5Recognition;
-  const hasWechatRecording = Boolean(wechatSpeechSession);
   speechRequest += 1;
-  wechatAuthorizationPending = false;
-  wechatPendingRequest = 0;
   voiceRecording.value = false;
   if (!showStatus) {
     activeSpeechSession = 0;
-    wechatSpeechSession = 0;
     voiceStatus.value = "";
   } else if (speechSession) {
     voiceStatus.value = "正在完成语音识别…";
   }
-  if (!speechSession && !recognition && !hasWechatRecording) {
+  if (!speechSession && !recognition) {
     if (!showStatus) voiceStatus.value = "";
     return;
   }
   try {
     recognition?.stop();
-    if (hasWechatRecording) {
-      wechatStopping = true;
-      wechatRecognitionManager?.stop();
-    }
   } catch {
-    wechatStopping = false;
     if (showStatus) finishVoiceInput(undefined, speechSession);
   }
 }
@@ -437,6 +369,20 @@ function handleStreamEvent(message: SSEEvent) {
   }
   if (message.event === "awaiting_confirmation") {
     clarificationQuestion.value = "";
+    if (data.advice?.summary) {
+      advisorMessage.value = {
+        summary: data.advice.summary,
+        actions: Array.isArray(data.advice.actions) ? data.advice.actions.slice(0, 3) : [],
+      };
+    }
+    parsing.value = false;
+    stream?.close();
+  }
+  if (message.event === "advice") {
+    advisorMessage.value = {
+      summary: data.summary || "暂时无法生成分析建议",
+      actions: Array.isArray(data.actions) ? data.actions.slice(0, 3) : [],
+    };
     parsing.value = false;
     stream?.close();
   }
@@ -452,6 +398,7 @@ function analyze() {
   const text = rawInput.value.trim();
   if (!text || !ledgerStore.currentId) return;
   parsing.value = true;
+  advisorMessage.value = null;
   sourceText.value = sourceText.value ? `${sourceText.value}；补充：${text}` : text;
   stream?.close();
   stream = createSSEConnection(transcribeStreamUrl(), {
@@ -519,6 +466,7 @@ function resetForm() {
   sessionId.value = "";
   clarificationQuestion.value = "";
   parsed.value = null;
+  advisorMessage.value = null;
   aaEnabled.value = false;
   selectedShareIds.value = [];
 }

@@ -79,6 +79,7 @@ textarea { caret-color: var(--color-primary); }
   box-shadow: 0 8rpx 20rpx rgba(var(--color-primary-rgb), 0.18) !important;
 }
 
+/* #ifdef H5 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -88,3 +89,4 @@ textarea { caret-color: var(--color-primary); }
     transition-duration: 1ms !important;
   }
 }
+/* #endif */

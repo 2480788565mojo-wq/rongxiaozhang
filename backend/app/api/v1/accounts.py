@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
-from app.api.deps import CurrentUser, DBSession
+from app.api.deps import CurrentUser, DBSession, require_ledger_access
 from app.schemas.account import AccountCreate, AccountOut, AccountUpdate
 from app.services.account_service import (
     create_account,
@@ -9,17 +9,9 @@ from app.services.account_service import (
     list_accounts,
     update_account,
 )
-from app.services.bill_service import get_accessible_ledger
 
 
 router = APIRouter()
-
-
-async def _require_access(db: DBSession, ledger_id: int, user_id: int) -> None:
-    try:
-        await get_accessible_ledger(db, ledger_id, user_id)
-    except PermissionError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "账本不存在或无权访问") from exc
 
 
 @router.get("", response_model=list[AccountOut])
@@ -28,7 +20,7 @@ async def read_accounts(
     db: DBSession,
     ledger_id: int = Query(default=1, gt=0),
 ) -> list[AccountOut]:
-    await _require_access(db, ledger_id, user.id)
+    await require_ledger_access(db, ledger_id, user.id)
     accounts = await list_accounts(db, user.id, ledger_id)
     return [AccountOut.model_validate(account) for account in accounts]
 
@@ -39,7 +31,7 @@ async def add_account(
     user: CurrentUser,
     db: DBSession,
 ) -> AccountOut:
-    await _require_access(db, payload.ledger_id, user.id)
+    await require_ledger_access(db, payload.ledger_id, user.id)
     try:
         account = await create_account(db, user.id, payload)
     except ValueError as exc:

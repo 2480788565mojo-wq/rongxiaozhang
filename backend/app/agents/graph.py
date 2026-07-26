@@ -4,8 +4,10 @@ import logging
 from time import monotonic
 from typing import Any
 
-from app.agents.guardian import guardian_node
+from app.agents.advisor import advisor_node
+from app.agents.guardian import guardian_node, guardian_review_node
 from app.agents.oracle import oracle_node
+from app.agents.orchestrator import orchestrator_finalize_node, orchestrator_node
 from app.agents.parser import parser_node
 from app.agents.social import social_node
 from app.agents.state import TransactionState
@@ -34,41 +36,110 @@ def route_after_guardian(state: TransactionState) -> str:
     return "oracle"
 
 
+def route_after_parser_collaboration(state: TransactionState) -> str:
+    """New graph routing while keeping route_after_parser backward compatible."""
+    if state.get("error") or state.get("missing_fields"):
+        return END_NODE
+    if state.get("route_mode") == "quick":
+        return "oracle"
+    return "guardian"
+
+
+def route_after_guardian_collaboration(state: TransactionState) -> str:
+    if state.get("error"):
+        return END_NODE
+    opinion = state.get("guardian_opinion") or {}
+    if (
+        state.get("route_mode") == "deep"
+        or state.get("risk_level") in {"warning", "blocked"}
+        or opinion.get("needs_advisor") is True
+    ):
+        return "advisor"
+    if state.get("is_shared_ledger", False):
+        return "social_ledger"
+    return "oracle"
+
+
+def route_after_advisor(state: TransactionState) -> str:
+    if state.get("error"):
+        return END_NODE
+    if state.get("intent") == "advice":
+        return "oracle"
+    return "guardian_review"
+
+
+def route_after_guardian_review(state: TransactionState) -> str:
+    if state.get("is_shared_ledger", False):
+        return "social_ledger"
+    return "oracle"
+
+
+def route_after_orchestrator(state: TransactionState) -> str:
+    if state.get("intent") == "advice":
+        return "advisor"
+    return "parser"
+
+
 def build_graph() -> Any:
     from langgraph.checkpoint.memory import MemorySaver
     from langgraph.graph import END, StateGraph
 
     builder = StateGraph(TransactionState)
+    builder.add_node("orchestrator", orchestrator_node)
     builder.add_node("parser", parser_node)
     builder.add_node("guardian", guardian_node)
+    builder.add_node("guardian_review", guardian_review_node)
+    builder.add_node("advisor", advisor_node)
     builder.add_node("social_ledger", social_node)
     builder.add_node("oracle", oracle_node)
-    builder.set_entry_point("parser")
+    builder.add_node("finalize", orchestrator_finalize_node)
+    builder.set_entry_point("orchestrator")
+    builder.add_conditional_edges(
+        "orchestrator",
+        route_after_orchestrator,
+        {"parser": "parser", "advisor": "advisor"},
+    )
 
     builder.add_conditional_edges(
         "parser",
-        route_after_parser,
+        route_after_parser_collaboration,
         {
             "guardian": "guardian",
+            "oracle": "oracle",
             END_NODE: END,
         },
     )
     builder.add_conditional_edges(
         "guardian",
-        route_after_guardian,
+        route_after_guardian_collaboration,
         {
+            "advisor": "advisor",
             "social_ledger": "social_ledger",
             "oracle": "oracle",
             END_NODE: END,
         },
     )
-    builder.add_edge("social_ledger", "oracle")
-    builder.add_edge("oracle", END)
-
-    return builder.compile(
-        checkpointer=MemorySaver(),
-        interrupt_before=["guardian"],
+    builder.add_conditional_edges(
+        "advisor",
+        route_after_advisor,
+        {
+            "guardian_review": "guardian_review",
+            "oracle": "oracle",
+        },
     )
+    builder.add_conditional_edges(
+        "guardian_review",
+        route_after_guardian_review,
+        {
+            "social_ledger": "social_ledger",
+            "oracle": "oracle",
+        },
+    )
+    builder.add_edge("social_ledger", "oracle")
+    builder.add_edge("oracle", "finalize")
+    builder.add_edge("finalize", END)
+
+    return builder.compile(checkpointer=MemorySaver())
 
 
 # Keep pure routing helpers importable while dependencies are being installed.
@@ -108,6 +179,9 @@ def cleanup_expired_transaction_sessions(
     target_graph = graph or compiled_graph
     if target_graph is None:
         return 0
+    checkpointer = getattr(target_graph, "checkpointer", None)
+    if checkpointer is None:
+        return 0
     current_time = monotonic() if now is None else now
     expired = [
         thread_id
@@ -115,7 +189,7 @@ def cleanup_expired_transaction_sessions(
         if current_time - last_seen >= settings.AGENT_SESSION_TTL_SECONDS
     ]
     for thread_id in expired:
-        target_graph.checkpointer.delete_thread(thread_id)
+        checkpointer.delete_thread(thread_id)
         _session_last_seen.pop(thread_id, None)
     return len(expired)
 
