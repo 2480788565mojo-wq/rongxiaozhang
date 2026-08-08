@@ -43,6 +43,7 @@ backend/chroma_data/
 backend/__pycache__/
 backend/**/*.pyc
 backend/*.db
+backend/.venv_clean/
 
 # Claude Code check markers (runtime artifacts)
 .claude/checks/
