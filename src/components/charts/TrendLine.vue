@@ -4,15 +4,16 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from "vue";
-import * as echarts from "echarts";
+import echarts from "./echarts-lite";
+import type { ECharts, EChartsOption } from "echarts";
 import type { TrendPoint } from "@/types";
 import EChartHost from "./EChartHost.vue";
 
 const props = withDefaults(defineProps<{ data: TrendPoint[] }>(), { data: () => [] });
 const chartRef = ref<any>(null);
-let chart: echarts.ECharts | null = null;
+let chart: ECharts | null = null;
 
-function option(): echarts.EChartsOption {
+function option(): EChartsOption {
   return {
     backgroundColor: "transparent",
     animationDuration: 280,

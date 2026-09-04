@@ -4,16 +4,17 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import * as echarts from "echarts";
+import echarts from "./echarts-lite";
+import type { ECharts, EChartsOption } from "echarts";
 import type { BudgetStatus } from "@/types";
 import EChartHost from "./EChartHost.vue";
 
 const props = withDefaults(defineProps<{ statuses: BudgetStatus[] }>(), { statuses: () => [] });
 const chartRef = ref<any>(null);
-let chart: echarts.ECharts | null = null;
+let chart: ECharts | null = null;
 const usage = computed(() => Math.max(0, ...props.statuses.map((item) => item.percentage), 0));
 
-function option(): echarts.EChartsOption {
+function option(): EChartsOption {
   const value = Math.min(usage.value, 150);
   return {
     backgroundColor: "transparent",

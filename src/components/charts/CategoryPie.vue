@@ -4,16 +4,17 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from "vue";
-import * as echarts from "echarts";
+import echarts from "./echarts-lite";
+import type { ECharts, EChartsOption } from "echarts";
 import type { CategoryStat } from "@/types";
 import EChartHost from "./EChartHost.vue";
 
 const props = withDefaults(defineProps<{ data: CategoryStat[] }>(), { data: () => [] });
 const chartRef = ref<any>(null);
-let chart: echarts.ECharts | null = null;
+let chart: ECharts | null = null;
 const colors = ["#4a90e2", "#34c759", "#ff9f0a", "#7d6ee8", "#5ac8fa", "#ff7a73", "#8e8e93"];
 
-function option(): echarts.EChartsOption {
+function option(): EChartsOption {
   return {
     color: colors,
     backgroundColor: "transparent",

@@ -132,7 +132,7 @@
             <u-icon :name="voiceRecording ? 'close' : 'mic'" color="currentColor" size="22" />
           </button>
           <textarea v-model="rawInput" class="speech-input" :placeholder="clarificationQuestion || '输入一笔收支…'" :maxlength="500" auto-height />
-          <button class="analyze-button" :disabled="!rawInput.trim()" aria-label="发送并解析" title="发送并解析" @click="analyze">
+          <button class="analyze-button" :class="{ 'is-idle': !rawInput.trim() }" aria-label="发送并解析" title="发送并解析" @click="analyze">
             <u-icon name="arrow-upward" color="#FFFFFF" size="21" />
           </button>
         </view>
@@ -537,6 +537,8 @@ onUnmounted(() => {
 .voice-button { color: var(--color-primary); background: var(--color-primary-soft); }
 .voice-button.recording { color: #fff; background: var(--color-danger); }
 .analyze-button { color: #fff; background: var(--color-primary); }
+/* 未输入文字时按钮保持可见，仅降低透明度示意待激活 */
+.analyze-button.is-idle { opacity: 0.5; }
 .speech-input { min-width: 0; min-height: 72rpx; max-height: 180rpx; flex: 1; padding: 15rpx 8rpx; box-sizing: border-box; color: var(--color-text); font-size: 29rpx; line-height: 42rpx; }
 .voice-status { display: flex; align-items: center; gap: 10rpx; min-height: 40rpx; padding: 0 10rpx 10rpx; color: var(--color-text-secondary); font-size: 22rpx; }
 .voice-status.active { color: var(--color-danger); }

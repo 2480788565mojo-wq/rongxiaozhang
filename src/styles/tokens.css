@@ -1,4 +1,6 @@
-:root {
+/* :root 供 H5 使用；page 供微信小程序使用（小程序没有 :root 根节点） */
+:root,
+page {
   --color-primary: #4a90e2;
   --color-primary-rgb: 74, 144, 226;
   --color-primary-soft: #edf5ff;
