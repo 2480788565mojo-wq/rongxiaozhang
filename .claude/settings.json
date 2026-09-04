@@ -7,7 +7,7 @@
       "Bash(git reset *)",
       "Bash(mkdir -p .claude/checks)",
       "Read(.claude/checks/*)",
-      "Write(.claude/checks/*)",
+      "Edit(.claude/checks/*)",
       "Bash(rm -f .claude/checks/*)"
     ]
   },
