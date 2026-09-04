@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     JWT_EXPIRE_DAYS: int = 30
 
     # 微信
-    WECHAT_APPID: str = "wx790e9576e610670e"
+    WECHAT_APPID: str = "wxd38420caf5333e29"
     WECHAT_SECRET: str = ""
 
     # LLM
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     QWEN_API_KEY: str = ""
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    QWEN_MODEL: str = "qwen-max"
+    QWEN_MODEL: str = "qwen3.8-max"
 
     # 应用
     APP_NAME: str = "荣小账 API"

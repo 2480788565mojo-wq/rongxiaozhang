@@ -41,11 +41,15 @@ class LLMClient:
         tools: list[dict[str, Any]],
         tool_choice: str = "auto",
     ) -> dict[str, Any] | None:
+        # qwen3.8 系列默认开启深度思考，记账解析只需快速结构化输出，
+        # 关闭思考模式以避免超时（enable_thinking 是百炼扩展参数，需走 extra_body）。
+        extra_body = {"enable_thinking": False} if self.provider == "qwen" else None
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             tools=tools,
             tool_choice=tool_choice,
+            extra_body=extra_body,
         )
         tool_calls = response.choices[0].message.tool_calls
         if not tool_calls:

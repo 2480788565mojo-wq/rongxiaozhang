@@ -147,11 +147,11 @@ async def generate_insight_report(
 
     draft = _fallback_draft(snapshot, tips)
     client = llm_client
-    if client is None and settings.DEEPSEEK_API_KEY:
+    if client is None and settings.QWEN_API_KEY:
         # Keep the external SDK optional for local/offline report generation.
         from app.core.llm import LLMClient
 
-        client = LLMClient("deepseek")
+        client = LLMClient("qwen")
     if client is not None:
         tool = {
             "type": "function",

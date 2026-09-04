@@ -20,7 +20,7 @@ class AgentBase(ABC, Generic[OutputModel]):
     timeout_seconds = 12.0
     max_attempts = 2
 
-    def __init__(self, provider: str = "deepseek") -> None:
+    def __init__(self, provider: str = "qwen") -> None:
         self.provider = provider
 
     @property

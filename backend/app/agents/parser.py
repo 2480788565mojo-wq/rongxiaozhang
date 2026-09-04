@@ -26,12 +26,12 @@ async def call_parser_llm(
 ) -> dict[str, Any] | None:
     # Keep the SDK import lazy so schema and routing tests can run without
     # loading an external AI client.
-    if not get_settings().DEEPSEEK_API_KEY.strip():
+    if not get_settings().QWEN_API_KEY.strip():
         return None
 
     from app.core.llm import LLMClient
 
-    client = LLMClient("deepseek")
+    client = LLMClient("qwen")
     return await client.call_with_tools(messages, tools)
 
 
