@@ -47,3 +47,9 @@ backend/.venv_clean/
 
 # Claude Code check markers (runtime artifacts)
 .claude/checks/
+
+# TRAE 工具目录（含本地计划文档）
+.trae/
+
+# 本地归档文档
+*.docx

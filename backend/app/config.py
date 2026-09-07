@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     ENABLE_DEV_LOGIN: bool = False
     CORS_ORIGINS: list[str] = ["*"]
 
+    # AI 功能总开关：审核期在 .env 中设为 false 可关闭全部 AI 能力（含前端入口），
+    # 审核通过后改为 true 重启即可恢复，无需重新发版。
+    AI_FEATURES_ENABLED: bool = True
+
     # 滥用防护
     LOGIN_LIMIT_PER_MINUTE: int = Field(default=10, gt=0)
     AI_TRANSCRIBE_LIMIT_PER_MINUTE: int = Field(default=20, gt=0)

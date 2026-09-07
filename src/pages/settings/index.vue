@@ -8,8 +8,7 @@
       <view @click="go('/pages/ledgers/index')"><text>账本管理</text><text>›</text></view>
       <view @click="go('/pages/accounts/index')"><text>账户管理</text><text>›</text></view>
       <view @click="go('/pages/categories/index')"><text>分类管理</text><text>›</text></view>
-      <view @click="go('/pages/insights/index')"><text>消费洞察</text><text>›</text></view>
-      <view @click="go('/pages/snake/index')"><text>小游戏</text><text>›</text></view>
+      <view v-if="appStore.aiEnabled" @click="go('/pages/insights/index')"><text>消费洞察</text><text>›</text></view>
     </view>
     <view class="menu">
       <view @click="exportCsv"><text>导出 CSV</text><text>›</text></view>
@@ -27,11 +26,13 @@ import { getAccounts } from "@/api/accounts";
 import { getCategories } from "@/api/categories";
 import { useLedgerStore } from "@/stores/ledger";
 import { useUserStore } from "@/stores/user";
+import { useAppStore } from "@/stores/app";
 import type { Bill } from "@/types";
 import { escapeCsvCell } from "@/utils/csv";
 
 const userStore = useUserStore();
 const ledgerStore = useLedgerStore();
+const appStore = useAppStore();
 onShow(async () => { if (!ledgerStore.currentId && userStore.isLoggedIn) await ledgerStore.fetchLedgers(); });
 function go(url: string) { uni.navigateTo({ url }); }
 async function allBills(): Promise<Bill[]> {

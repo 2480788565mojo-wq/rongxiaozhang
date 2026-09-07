@@ -60,6 +60,11 @@ async def transcribe_bill(
     db: DBSession,
     redis: RedisClient,
 ) -> StreamingResponse:
+    if not settings.AI_FEATURES_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI 记账功能暂不可用",
+        )
     await require_rate_limits(
         redis,
         f"user:{user.id}:ai-transcribe",

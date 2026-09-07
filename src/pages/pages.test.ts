@@ -171,10 +171,13 @@ describe('语音记账页面', () => {
   it('微信端点击语音按钮时提示当前版本暂不支持', async () => {
     const { useUserStore } = await import('@/stores/user')
     const { useLedgerStore } = await import('@/stores/ledger')
+    const { useAppStore } = await import('@/stores/app')
     const pinia = activatePinia()
     useUserStore().token = 'token'
     useLedgerStore().ledgers = [ledger]
     useLedgerStore().switchLedger(1)
+    // AI 开关默认关闭，挂载前打开以测试智能记账界面
+    useAppStore().aiEnabled = true
     const wrapper = await mountPage('./transcribe/index.vue', pinia)
     await wrapper.find('.speech-input').setValue('原文')
     await wrapper.find('.voice-button').trigger('click')

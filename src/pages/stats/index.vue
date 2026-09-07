@@ -44,7 +44,7 @@
       <view v-if="!categories.length" class="empty-state compact"><u-icon name="order" color="#B0B0B5" size="28" /><text>暂无分类排行</text></view>
     </view>
 
-    <navigator class="ai-card card" url="/pages/insights/index" hover-class="pressable">
+    <navigator v-if="appStore.aiEnabled" class="ai-card card" url="/pages/insights/index" hover-class="pressable">
       <view class="ai-icon"><u-icon name="chat" color="#7D6EE8" size="23" /></view>
       <view class="ai-copy"><text class="section-title">AI 消费分析</text><text class="section-subtitle">查看本月消费洞察</text></view>
       <u-icon name="arrow-right" color="#C7C7CC" size="18" />
@@ -61,9 +61,11 @@ import TrendLine from "@/components/charts/TrendLine.vue";
 import CategoryPie from "@/components/charts/CategoryPie.vue";
 import { getCategoryStats, getOverview, getTrend } from "@/api/stats";
 import { useLedgerStore } from "@/stores/ledger";
+import { useAppStore } from "@/stores/app";
 import type { CategoryStat, TrendPoint } from "@/types";
 
 const ledgerStore = useLedgerStore();
+const appStore = useAppStore();
 const year = ref(0);
 const month = ref(0);
 const currentMonth = computed(() => `${year.value}年${month.value}月`);

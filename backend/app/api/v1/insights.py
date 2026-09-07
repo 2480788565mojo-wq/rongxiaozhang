@@ -34,6 +34,11 @@ async def generate_insight(
     db: DBSession,
     redis: RedisClient,
 ) -> InsightGenerateResponse:
+    if not settings.AI_FEATURES_ENABLED:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "洞察功能暂不可用",
+        )
     await require_rate_limits(
         redis,
         f"user:{user.id}:ai-insight",

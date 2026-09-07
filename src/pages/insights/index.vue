@@ -17,12 +17,16 @@ import { ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { generateInsight, getInsights } from "@/api/insights";
 import { useLedgerStore } from "@/stores/ledger";
+import { useAppStore } from "@/stores/app";
 import type { Insight } from "@/types";
 
 const ledgerStore = useLedgerStore();
+const appStore = useAppStore();
 const insights = ref<Insight[]>([]);
 const generating = ref(false);
 onShow(async () => {
+  // AI 功能关闭时直接返回，避免通过历史入口进入
+  if (!appStore.aiEnabled) { uni.navigateBack(); return; }
   if (!ledgerStore.currentId) await ledgerStore.fetchLedgers();
   if (ledgerStore.currentId) insights.value = (await getInsights(ledgerStore.currentId)).items;
 });

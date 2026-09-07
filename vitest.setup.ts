@@ -30,6 +30,7 @@ const uni = {
   navigateTo: vi.fn(),
   switchTab: vi.fn(),
   navigateBack: vi.fn(),
+  setNavigationBarTitle: vi.fn(),
   showModal: vi.fn(),
   authorize: vi.fn(),
   openSetting: vi.fn(),

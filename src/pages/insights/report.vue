@@ -20,11 +20,17 @@
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { getInsight } from "@/api/insights";
+import { useAppStore } from "@/stores/app";
 import type { Insight } from "@/types";
 
+const appStore = useAppStore();
 const report = ref<Insight | null>(null);
 const reportName = computed(() => report.value?.report_type === "monthly" ? "月度消费洞察" : report.value?.report_type === "weekly" ? "每周消费小结" : "消费专项洞察");
-onLoad(async (query) => { report.value = await getInsight(Number(query?.id)); });
+onLoad(async (query) => {
+  // AI 功能关闭时直接返回
+  if (!appStore.aiEnabled) { uni.navigateBack(); return; }
+  report.value = await getInsight(Number(query?.id));
+});
 </script>
 
 <style scoped>

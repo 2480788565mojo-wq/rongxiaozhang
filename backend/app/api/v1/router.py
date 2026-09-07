@@ -32,3 +32,9 @@ api_router.include_router(sse.router, prefix="/sse", tags=["实时推送"])
 @api_router.get("/health", tags=["系统"])
 async def api_health() -> dict[str, str]:
     return {"status": "ok", "version": "2.0.0"}
+
+
+@api_router.get("/config", tags=["系统"])
+async def public_config() -> dict[str, bool]:
+    """免登录的客户端配置接口：前端启动时拉取，决定 AI 相关功能是否展示。"""
+    return {"ai_enabled": settings.AI_FEATURES_ENABLED}

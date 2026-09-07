@@ -21,7 +21,7 @@
 		{
 			"path": "pages/transcribe/index",
 			"style": {
-				"navigationBarTitleText": "AI 智能记账"
+				"navigationBarTitleText": "记账"
 			}
 		},
 		{
@@ -94,12 +94,6 @@
 			"path": "pages/insights/report",
 			"style": {
 				"navigationBarTitleText": "洞察报告"
-			}
-		},
-		{
-			"path": "pages/snake/index",
-			"style": {
-				"navigationBarTitleText": "贪吃蛇"
 			}
 		}
 	],

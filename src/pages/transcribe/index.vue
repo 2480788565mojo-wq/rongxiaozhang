@@ -1,5 +1,15 @@
 <template>
   <view class="page">
+    <!-- AI 功能关闭态（审核期）：手动记账引导，页面不出现任何 AI 相关字样 -->
+    <view v-if="!appStore.aiEnabled" class="manual-guide">
+      <image class="guide-logo" src="/static/logo.jpg" mode="aspectFill" />
+      <text class="guide-title">记一笔</text>
+      <text class="guide-subtitle">手动填写金额、分类和账户，快速记录每笔收支</text>
+      <button class="primary-button" @click="goManualAdd">开始记账</button>
+    </view>
+
+    <!-- AI 功能开启态：智能记账界面 -->
+    <template v-else>
     <view class="brand-row">
       <image class="brand-logo" src="/static/logo.jpg" mode="aspectFill" />
       <view class="brand-copy">
@@ -138,6 +148,7 @@
         </view>
       </view>
     </template>
+    </template>
   </view>
 </template>
 
@@ -149,6 +160,7 @@ import { confirmBill, transcribeStreamUrl } from "@/api/bills";
 import { useBillStore } from "@/stores/bill";
 import { useLedgerStore } from "@/stores/ledger";
 import { useUserStore } from "@/stores/user";
+import { useAppStore } from "@/stores/app";
 import type { ParsedBill, SSEEvent } from "@/types";
 import { createSSEConnection, type SSEConnection } from "@/utils/sse";
 import { joinSpeechText, speechErrorMessage } from "@/utils/speech";
@@ -156,6 +168,7 @@ import { joinSpeechText, speechErrorMessage } from "@/utils/speech";
 const userStore = useUserStore();
 const ledgerStore = useLedgerStore();
 const billStore = useBillStore();
+const appStore = useAppStore();
 const rawInput = ref("");
 const sourceText = ref("");
 const sessionId = ref("");
@@ -199,6 +212,11 @@ async function login() {
 
 async function ensureLedgers() {
   if (userStore.isLoggedIn && !ledgerStore.ledgers.length) await ledgerStore.fetchLedgers();
+}
+
+/** AI 关闭态：跳转到手动记账表单页 */
+function goManualAdd() {
+  uni.navigateTo({ url: "/pages/add/index" });
 }
 
 function updateSpeechDraft(text: string, speechSession = activeSpeechSession) {
@@ -471,7 +489,11 @@ function resetForm() {
   selectedShareIds.value = [];
 }
 
-onShow(() => void ensureLedgers());
+onShow(() => {
+  // 导航标题随开关动态切换：关闭态用中性标题，开启态显示完整名称
+  uni.setNavigationBarTitle({ title: appStore.aiEnabled ? "AI 智能记账" : "记账" });
+  if (appStore.aiEnabled) void ensureLedgers();
+});
 onUnmounted(() => {
   stream?.close();
   stopVoiceInput(false);
@@ -480,6 +502,11 @@ onUnmounted(() => {
 
 <style scoped>
 .page { min-height: 100vh; padding: 24rpx 28rpx 340rpx; box-sizing: border-box; }
+.manual-guide { display: flex; margin-top: 180rpx; padding: 64rpx 40rpx; flex-direction: column; align-items: center; text-align: center; }
+.guide-logo { width: 120rpx; height: 120rpx; border-radius: 30rpx; }
+.guide-title { margin-top: 32rpx; color: var(--color-text); font-size: 40rpx; font-weight: 700; }
+.guide-subtitle { margin-top: 16rpx; color: var(--color-text-secondary); font-size: 27rpx; line-height: 1.6; }
+.manual-guide .primary-button { width: 360rpx; margin-top: 48rpx; }
 .card { border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .brand-row { display: flex; align-items: center; gap: 16rpx; }
 .brand-logo { width: 72rpx; height: 72rpx; flex: none; border-radius: 20rpx; }

@@ -92,7 +92,7 @@
         </view>
       </view>
 
-      <view class="insight-card card" @click="go('/pages/insights/index')">
+      <view v-if="appStore.aiEnabled" class="insight-card card" @click="go('/pages/insights/index')">
         <view class="insight-icon"><u-icon name="chat" color="#7D6EE8" size="24" /></view>
         <view class="insight-copy">
           <text class="section-title">AI 消费洞察</text>
@@ -136,6 +136,7 @@ import { useBillStore } from "@/stores/bill";
 import { useBudgetStore } from "@/stores/budget";
 import { useLedgerStore } from "@/stores/ledger";
 import { useUserStore } from "@/stores/user";
+import { useAppStore } from "@/stores/app";
 import { useAccountStore } from "@/stores/account";
 
 const userStore = useUserStore();
@@ -143,6 +144,7 @@ const ledgerStore = useLedgerStore();
 const billStore = useBillStore();
 const budgetStore = useBudgetStore();
 const accountStore = useAccountStore();
+const appStore = useAppStore();
 const year = ref(0);
 const month = ref(0);
 const overview = reactive({ expense: 0, income: 0, balance: 0 });
