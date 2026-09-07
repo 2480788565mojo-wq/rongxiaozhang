@@ -29,6 +29,21 @@ export function getBills(params: BillQuery) {
   return api<BillListResponse>("/bills", { params: { ...params } });
 }
 
+export interface CreateBillPayload {
+  ledger_id: number;
+  type: "expense" | "income";
+  amount: number;
+  category: string;
+  subcategory?: string;
+  account?: string;
+  note?: string;
+  bill_date: string;
+}
+
+export function createBill(payload: CreateBillPayload) {
+  return api<Bill>("/bills", { method: "POST", body: payload });
+}
+
 export function getBill(id: number) {
   return api<Bill>(`/bills/${id}`);
 }

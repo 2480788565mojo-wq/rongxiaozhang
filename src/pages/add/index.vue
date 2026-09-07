@@ -22,20 +22,20 @@
 				<view class="form-item" @click="selectParent">
 					<text class="form-label">分类</text>
 					<text class="form-value">{{ selectedCategory || '请选择' }}</text>
-					<text class="arrow">></text>
+					<text class="arrow">&gt;</text>
 				</view>
 				<!-- 选择账户 -->
 				<view class="form-item" @click="showAccount = true">
 					<text class="form-label">账户</text>
 					<text class="form-value">{{ formData.account || '请选择' }}</text>
-					<text class="arrow">></text>
+					<text class="arrow">&gt;</text>
 				</view>
 				<!-- 选择日期，默认今天 -->
 				<picker mode="date" :value="formData.date" @change="onDateChange">
 					<view class="form-item" style="border-bottom: none;">
 						<text class="form-label">日期</text>
 						<text class="form-value">{{ formData.date }}</text>
-						<text class="arrow">></text>
+						<text class="arrow">&gt;</text>
 					</view>
 				</picker>
 				<!-- 备注，选填 -->
@@ -51,14 +51,42 @@
 		</view>
 
 		<u-picker :show="showAccount" :columns="[accountList]" @confirm="onAccountConfirm" @cancel="showAccount = false" keyName="name"></u-picker>
+
+		<!-- 分类选择弹窗 -->
+		<view v-if="showCategory" class="cat-mask" @click="showCategory = false">
+			<view class="cat-popup" @click.stop>
+				<view class="cat-header">
+					<text class="cat-title">{{ catStep === 'parent' ? '选择分类' : '选择子分类' }}</text>
+					<text class="cat-close" @click="showCategory = false">✕</text>
+				</view>
+				<scroll-view scroll-y class="cat-list" style="height: 56vh;">
+					<view
+						v-for="(item, idx) in catStep === 'parent' ? parentOptions : childOptions"
+						:key="idx"
+						class="cat-item"
+						@click="onCatSelect(idx)"
+					>
+						<text>{{ item }}</text>
+					</view>
+				</scroll-view>
+			</view>
+		</view>
 	</view>
 </template>
 
 <script setup lang="ts">
 // 导入 Vue 响应式 API 和项目数据操作函数
 import { ref, reactive } from 'vue';
-import { addBill, getAccounts, getAllCategories, getBills, updateBill, type Account, type Bill } from '@/utils/store';
+import { getAccounts, getAllCategories, getBills, updateBill, type Account, type Bill } from '@/utils/store';
 import { onShow } from '@dcloudio/uni-app';
+import { createBill as createBillApi, updateBill as updateBillApi } from '@/api/bills';
+import { useBillStore } from '@/stores/bill';
+import { useLedgerStore } from '@/stores/ledger';
+import { useUserStore } from '@/stores/user';
+
+const userStore = useUserStore();
+const ledgerStore = useLedgerStore();
+const billStore = useBillStore();
 
 // 表单数据：类型（支出/收入）、金额、分类、账户、日期、备注
 const formData = reactive({
@@ -72,34 +100,42 @@ const formData = reactive({
 
 const showAccount = ref(false);
 const selectedCategory = ref('');
+const showCategory = ref(false);
+const catStep = ref<'parent' | 'child'>('parent');
+const parentOptions = ref<string[]>([]);
+const childOptions = ref<string[]>([]);
+const selectedParent = ref<{ name: string; children: string[] } | null>(null);
 const currentParents = ref<{name: string; children: string[]}[]>([]);
 
 // 选择大类：弹出可选的大类列表，用户选择后再选子类
 function selectParent() {
 	const all = getAllCategories(formData.type);
+	parentOptions.value = all.map(c => c.name);
 	currentParents.value = all.map(c => ({ name: c.name, children: c.children }));
-	const names = all.map(c => c.name);
-	uni.showActionSheet({
-		itemList: names,
-		success: (res) => {
-			const parent = currentParents.value[res.tapIndex];
-			if (parent && parent.children.length > 0) {
-				selectChild(parent.name, parent.children);
-			}
-		}
-	});
+	catStep.value = 'parent';
+	showCategory.value = true;
 }
 
-// 选择子分类
-function selectChild(parentName: string, children: string[]) {
-	uni.showActionSheet({
-		itemList: children,
-		success: (res) => {
-			const child = children[res.tapIndex];
-			selectedCategory.value = parentName + ' › ' + child;
+function onCatSelect(idx: number) {
+	if (catStep.value === 'parent') {
+		const parent = currentParents.value[idx];
+		if (parent && parent.children.length > 0) {
+			selectedParent.value = parent;
+			childOptions.value = parent.children;
+			catStep.value = 'child';
+		} else if (parent) {
+			selectedCategory.value = parent.name;
+			formData.category = parent.name;
+			showCategory.value = false;
+		}
+	} else {
+		const child = childOptions.value[idx];
+		if (child && selectedParent.value) {
+			selectedCategory.value = selectedParent.value.name + ' › ' + child;
 			formData.category = child;
 		}
-	});
+		showCategory.value = false;
+	}
 }
 
 const accountList = ref<{name: string}[]>([]);
@@ -128,7 +164,7 @@ function onDateChange(e: any) {
 }
 
 // 保存账单：先校验金额/分类/账户是否已填写，再保存或更新
-function saveBill() {
+async function saveBill() {
 	if (!formData.amount || parseFloat(formData.amount) <= 0) {
 		uni.showToast({ title: '请输入金额', icon: 'none' });
 		return;
@@ -141,25 +177,35 @@ function saveBill() {
 		uni.showToast({ title: '请选择账户', icon: 'none' });
 		return;
 	}
-
-	const billData = {
-		type: formData.type,
-		amount: parseFloat(parseFloat(formData.amount).toFixed(2)),
-		category: formData.category,
-		categoryPath: selectedCategory.value.split(' › '),
-		account: formData.account,
-		note: formData.note,
-		date: formData.date,
-	};
-
-	if (editId.value) {
-		updateBill(editId.value, billData);
-	} else {
-		addBill(billData);
+	if (!userStore.isLoggedIn || !ledgerStore.currentId) {
+		uni.showToast({ title: '请先登录', icon: 'none' });
+		return;
 	}
 
-	uni.showToast({ title: editId.value ? '更新成功' : '保存成功', icon: 'success' });
-	setTimeout(() => uni.navigateBack(), 800);
+	const catPath = selectedCategory.value.split(' › ');
+	const billData = {
+		ledger_id: ledgerStore.currentId,
+		type: formData.type,
+		amount: parseFloat(parseFloat(formData.amount).toFixed(2)),
+		category: catPath[0] || formData.category,
+		subcategory: catPath[1] || undefined,
+		account: formData.account,
+		note: formData.note || undefined,
+		bill_date: formData.date,
+	};
+
+	try {
+		if (editId.value) {
+			await updateBillApi(Number(editId.value), billData);
+		} else {
+			const created = await createBillApi(billData);
+			billStore.prepend(created);
+		}
+		uni.showToast({ title: editId.value ? '更新成功' : '保存成功', icon: 'success' });
+		setTimeout(() => uni.navigateBack(), 800);
+	} catch (e: any) {
+		uni.showToast({ title: e?.message || '保存失败', icon: 'none' });
+	}
 }
 
 const editId = ref('');
@@ -228,4 +274,14 @@ loadAccounts();
 .arrow { margin-left: 10rpx; color: var(--color-primary); font-size: 28rpx; }
 .btn-save { margin-top: 28rpx; }
 .save-button { border: 0 !important; border-radius: var(--radius-pill) !important; color: #fff !important; background: var(--color-primary) !important; box-shadow: 0 8rpx 20rpx rgba(var(--color-primary-rgb), .18) !important; font-weight: 600; }
+
+.cat-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.45); z-index: 999; display: flex; align-items: flex-end; }
+.cat-popup { width: 100%; max-height: 70vh; background: #fff; border-radius: 28rpx 28rpx 0 0; display: flex; flex-direction: column; }
+.cat-header { display: flex; align-items: center; justify-content: space-between; padding: 28rpx 32rpx; border-bottom: 1rpx solid #f0f0f0; }
+.cat-title { font-size: 30rpx; font-weight: 600; color: #333; }
+.cat-close { font-size: 32rpx; color: #999; padding: 4rpx 8rpx; }
+.cat-list { max-height: 56vh; }
+.cat-item { display: flex; align-items: center; min-height: 88rpx; padding: 0 32rpx; border-bottom: 1rpx solid #f5f5f5; }
+.cat-item:active { background: #f9f9f9; }
+.cat-item text { font-size: 28rpx; color: #333; }
 </style>

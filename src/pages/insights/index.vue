@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page" v-if="appStore.aiEnabled">
     <button class="generate" :loading="generating" @click="generate">生成本月洞察</button>
     <view v-for="item in insights" :key="item.id" class="insight" @click="open(item.id)">
       <view class="insight-head">

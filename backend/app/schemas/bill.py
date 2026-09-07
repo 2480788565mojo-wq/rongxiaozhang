@@ -30,6 +30,25 @@ class TranscribeResponse(BaseModel):
     bill: dict | None = None
 
 
+class BillCreateRequest(BaseModel):
+    ledger_id: int = Field(gt=0)
+    type: BillKind
+    amount: float = Field(gt=0, le=100_000_000, allow_inf_nan=False)
+    category: str = Field(min_length=1, max_length=64)
+    subcategory: str | None = Field(default=None, max_length=64)
+    account: str | None = Field(default=None, max_length=64)
+    note: str | None = Field(default=None, max_length=256)
+    bill_date: date
+
+    @field_validator("category", "subcategory", "account", "note", mode="before")
+    @classmethod
+    def trim_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class ParsedBillInput(BaseModel):
     type: BillKind
     amount: float = Field(gt=0, le=100_000_000, allow_inf_nan=False)

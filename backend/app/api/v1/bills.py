@@ -24,6 +24,7 @@ from app.config import get_settings
 from app.core.rate_limit import RateLimitRule
 from app.schemas.bill import (
     BillConfirmRequest,
+    BillCreateRequest,
     BillListParams,
     BillListResponse,
     BillOut,
@@ -198,6 +199,39 @@ async def transcribe_bill(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("", response_model=BillOut)
+async def create_bill(
+    request: BillCreateRequest,
+    user: CurrentUser,
+    db: DBSession,
+    redis: RedisClient,
+) -> BillOut:
+    await require_ledger_access(db, request.ledger_id, user.id)
+    await lock_user_for_billing(db, user.id)
+    parsed = {
+        "type": request.type,
+        "amount": request.amount,
+        "category": request.category,
+        "subcategory": request.subcategory,
+        "account": request.account,
+        "note": request.note,
+        "bill_date": request.bill_date.isoformat(),
+    }
+    bill = await create_bill_from_parsed(
+        db,
+        redis,
+        user.id,
+        request.ledger_id,
+        parsed,
+        raw_input="",
+    )
+    await db.commit()
+    loaded = await get_bill_with_access(db, bill.id, user.id)
+    if loaded is None:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "账单保存后读取失败")
+    return BillOut.model_validate(loaded[0])
 
 
 @router.post("/confirm", response_model=BillOut)
