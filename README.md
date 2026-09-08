@@ -273,5 +273,5 @@ docker run -p 8080:8080 --env-file .env rongxiaozhang-backend
 
 - **微信小程序 AppID**：`wx790e9576e610670e`
 - **生产 API 域名**：`https://api.rongxiaozhang.cn`
-- **版本**：v2.0.0
+- **版本**：v1.0.1
 - **协议**：保留所有权利
