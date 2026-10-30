@@ -41,7 +41,11 @@
         "appid" : "wx790e9576e610670e",
         "optimization": { "subPackages": true },
         "setting" : {
-            "urlCheck" : true
+            "urlCheck" : true,
+            "minified" : true,
+            "postcss" : true,
+            "minifyWXSS" : true,
+            "minifyWXML" : true
         },
         "usingComponents" : true
     },
