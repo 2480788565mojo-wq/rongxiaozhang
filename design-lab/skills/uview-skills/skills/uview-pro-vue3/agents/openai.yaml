@@ -1,0 +1,4 @@
+interface:
+  display_name: "Uview Pro Vue3"
+  short_description: "uView Pro Vue 3 component library including components, tools…"
+  default_prompt: "Use $uview-pro-vue3 to help with my current task: Provides comprehensive guidance for uView Pro Vue 3 component library including components, tools, layouts, and templates."

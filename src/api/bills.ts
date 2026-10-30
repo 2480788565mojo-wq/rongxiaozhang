@@ -16,6 +16,7 @@ export interface ConfirmBillPayload {
   raw_input: string;
   parsed: ParsedBill;
   share_user_ids?: number[];
+  is_batch_item?: boolean;
   force?: boolean;
 }
 
@@ -30,18 +31,26 @@ export function getBills(params: BillQuery) {
 }
 
 export interface CreateBillPayload {
+  import_key?: string;
   ledger_id: number;
   type: "expense" | "income";
   amount: number;
   category: string;
-  subcategory?: string;
-  account?: string;
-  note?: string;
+  subcategory?: string | null;
+  account?: string | null;
+  note?: string | null;
   bill_date: string;
 }
 
 export function createBill(payload: CreateBillPayload) {
   return api<Bill>("/bills", { method: "POST", body: payload });
+}
+
+export type BillImportItem = Omit<CreateBillPayload, 'ledger_id' | 'import_key'> & { import_key: string };
+export interface BillImportResult { items: { import_key: string; bill_id: number; created: boolean }[] }
+
+export function importBills(ledgerId: number, items: BillImportItem[]) {
+  return api<BillImportResult>('/bills/import', { method: 'POST', body: { ledger_id: ledgerId, items } });
 }
 
 export function getBill(id: number) {

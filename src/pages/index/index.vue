@@ -32,7 +32,12 @@
           <view class="asset-icon"><u-icon name="rmb-circle" color="#4A90E2" size="24" /></view>
         </view>
         <text class="asset-value numeric">¥{{ accountStore.totalBalance.toFixed(2) }}</text>
-        <text class="asset-note">所有账户余额</text>
+        <view class="asset-foot">
+          <text class="asset-note">所有账户余额</text>
+          <text v-if="overview.budget_used_percentage !== null" class="asset-pill">
+            预算已用 {{ overview.budget_used_percentage }}%
+          </text>
+        </view>
       </view>
 
       <view class="summary-grid">
@@ -63,10 +68,19 @@
           <view class="quick-icon orange"><u-icon name="coupon" color="#FF9F0A" size="22" /></view>
           <text>预算</text>
         </button>
-        <button class="quick-item card" @click="go('/pages/insights/index')">
+        <button v-if="appStore.aiEnabled" class="quick-item card" @click="go('/pages/insights/index')">
           <view class="quick-icon violet"><u-icon name="chat" color="#7D6EE8" size="22" /></view>
           <text>洞察</text>
         </button>
+      </view>
+
+      <view class="excel-import card" hover-class="pressable" @click="openImport">
+        <view class="quick-icon blue"><u-icon name="file-text" color="#4A90E2" size="22" /></view>
+        <view class="excel-copy">
+          <text class="section-title">导入 Excel 账单</text>
+          <text class="section-subtitle">从表格批量添加历史记录</text>
+        </view>
+        <u-icon name="arrow-right" color="#C7C7CC" size="18" />
       </view>
 
       <view class="section card budget-card" @click="go('/pages/budget/index')">
@@ -92,7 +106,7 @@
         </view>
       </view>
 
-      <view v-if="appStore.aiEnabled" class="insight-card card" @click="go('/pages/insights/index')">
+      <view v-if="appStore.aiEnabled" class="insight-card card" hover-class="pressable" @click="go('/pages/insights/index')">
         <view class="insight-icon"><u-icon name="chat" color="#7D6EE8" size="24" /></view>
         <view class="insight-copy">
           <text class="section-title">AI 消费洞察</text>
@@ -102,14 +116,16 @@
       </view>
 
       <view class="section card recent-card">
-        <view class="section-head">
-          <view>
+        <view class="recent-toggle" role="button" :aria-expanded="recentExpanded" hover-class="pressable" @click="recentExpanded = !recentExpanded">
+          <view class="recent-heading">
             <text class="section-title">最近记录</text>
-            <text class="section-subtitle">本月最新账单</text>
+            <text class="section-subtitle">本月最近 {{ recentBills.length }} 笔</text>
+            <text v-if="recentBills.length" class="section-subtitle">支出 ¥{{ recentTotals.expense.toFixed(2) }} · 收入 ¥{{ recentTotals.income.toFixed(2) }}</text>
           </view>
-          <button class="text-button" @click.stop="openBills">查看全部</button>
+          <view class="recent-action"><text>{{ recentExpanded ? '收起' : '展开' }}</text><u-icon :name="recentExpanded ? 'arrow-up' : 'arrow-down'" color="#86868B" size="14" /></view>
         </view>
-        <view v-for="bill in recentBills" :key="bill.id" class="bill-row" @click="openBill(bill.id)">
+        <view v-if="recentExpanded" class="recent-content">
+        <view v-for="bill in recentBills" :key="bill.id" class="bill-row" hover-class="pressable" @click="openBill(bill.id)">
           <view class="category-mark">{{ bill.category.slice(0, 1) }}</view>
           <view class="bill-copy">
             <text class="bill-category">{{ bill.category }}</text>
@@ -121,15 +137,19 @@
           <view class="empty-icon"><u-icon name="order" color="#86868B" size="24" /></view>
           <text>本月还没有账单</text>
         </view>
-      </view>
+        <button class="text-button" @click="openBills">查看全部账单</button>
+        </view>
+          </view>
     </template>
     <FabBtn />
+    <BudgetAlert />
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
+import BudgetAlert from "@/components/BudgetAlert.vue";
 import FabBtn from "@/components/FabBtn.vue";
 import { getOverview } from "@/api/stats";
 import { useBillStore } from "@/stores/bill";
@@ -147,8 +167,18 @@ const accountStore = useAccountStore();
 const appStore = useAppStore();
 const year = ref(0);
 const month = ref(0);
-const overview = reactive({ expense: 0, income: 0, balance: 0 });
+const overview = reactive({
+  expense: 0,
+  income: 0,
+  balance: 0,
+  budget_used_percentage: null as number | null,
+});
 const recentBills = computed(() => billStore.bills.slice(0, 5));
+const recentExpanded = ref(false);
+const recentTotals = computed(() => recentBills.value.reduce((totals, bill) => {
+  totals[bill.type] += bill.amount;
+  return totals;
+}, { expense: 0, income: 0 }));
 
 function syncCurrentPeriod() {
   const now = new Date();
@@ -157,8 +187,15 @@ function syncCurrentPeriod() {
 }
 
 async function login() {
-  await userStore.login();
-  await load();
+  try {
+    await userStore.login();
+    await load();
+  } catch (error) {
+    uni.showToast({
+      title: error instanceof Error ? error.message : "登录失败，请重试",
+      icon: "none",
+    });
+  }
 }
 
 async function load() {
@@ -183,10 +220,12 @@ async function load() {
     overview.expense = statsResult.value.expense;
     overview.income = statsResult.value.income;
     overview.balance = statsResult.value.balance;
+    overview.budget_used_percentage = statsResult.value.budget_used_percentage ?? null;
   } else {
     overview.expense = 0;
     overview.income = 0;
     overview.balance = 0;
+    overview.budget_used_percentage = null;
   }
   if (billsResult.status === "rejected") billStore.clear();
   if (budgetResult.status === "rejected") budgetStore.statuses = [];
@@ -199,71 +238,87 @@ async function load() {
 onShow(() => void load());
 function go(url: string) { uni.navigateTo({ url }); }
 function openBills() { uni.switchTab({ url: "/pages/bills/index" }); }
+function openImport() { uni.navigateTo({ url: "/subpackages/import/index" }); }
 function openBill(id: number) { uni.navigateTo({ url: `/pages/bills/detail?id=${id}` }); }
 </script>
 
 <style scoped>
-.page { min-height: 100vh; padding: 24rpx 32rpx 160rpx; box-sizing: border-box; }
+.page { min-height: 100vh; padding: 24rpx 28rpx 160rpx; box-sizing: border-box; }
 .card { border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .topbar, .brand, .ledger-chip, .asset-header, .section-head, .budget-copy, .insight-card, .bill-row { display: flex; align-items: center; }
 .topbar, .asset-header, .section-head, .budget-copy { justify-content: space-between; }
 .brand { min-width: 0; gap: 16rpx; }
-.brand-logo { width: 72rpx; height: 72rpx; flex: none; border-radius: 20rpx; }
+.brand-logo { width: 68rpx; height: 68rpx; flex: none; border-radius: 18rpx; }
 .brand-copy { display: flex; min-width: 0; flex-direction: column; }
-.brand-name { color: var(--color-text); font-size: 34rpx; font-weight: 700; }
-.brand-greeting { margin-top: 4rpx; color: var(--color-text-secondary); font-size: 23rpx; }
-.ledger-chip { max-width: 230rpx; gap: 8rpx; padding: 12rpx 18rpx; border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-primary-soft); font-size: 23rpx; }
+.brand-name { color: var(--color-text); font-size: 32rpx; font-weight: 700; }
+.brand-greeting { margin-top: 4rpx; color: var(--color-text-secondary); font-size: 22rpx; }
+.ledger-chip { max-width: 230rpx; gap: 8rpx; padding: 10rpx 16rpx; border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-primary-soft); font-size: 22rpx; }
 .ledger-chip text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .login-card { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; margin-top: 32rpx; padding: 32rpx; }
 .login-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .login-title { font-size: 34rpx; font-weight: 600; }
 .login-subtitle { margin-top: 8rpx; color: var(--color-text-secondary); font-size: 24rpx; }
-.primary-button { width: 184rpx; height: 72rpx; margin: 0; border-radius: var(--radius-pill); color: #fff; background: var(--color-primary); font-size: 26rpx; line-height: 72rpx; }
-.asset-card { margin-top: 32rpx; padding: 36rpx 36rpx 40rpx; animation: card-enter var(--transition-standard) both; }
+.primary-button { width: 200rpx; height: var(--button-height-lg); margin: 0; border: 0; border-radius: var(--radius-pill); color: #fff; background: var(--color-primary); font-size: var(--button-font-lg); font-weight: 600; line-height: var(--button-height-lg); }
+.asset-card {
+  margin-top: 28rpx;
+  padding: 34rpx 34rpx 30rpx;
+  border: 1rpx solid #e3eefb;
+  background: linear-gradient(135deg, #f4f9ff 0%, #ffffff 62%);
+  box-shadow: var(--shadow-card);
+  animation: card-enter var(--transition-standard) both;
+}
 .asset-header > view:first-child { display: flex; flex-direction: column; }
-.eyebrow { color: var(--color-text-secondary); font-size: 26rpx; }
+.eyebrow { color: var(--color-text-secondary); font-size: 24rpx; }
 .period { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 22rpx; }
-.asset-icon { display: flex; align-items: center; justify-content: center; width: 72rpx; height: 72rpx; border-radius: 24rpx; background: var(--color-primary-soft); }
-.asset-value { display: block; margin-top: 28rpx; overflow: hidden; color: var(--color-text); font-size: 62rpx; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
-.asset-note { display: block; margin-top: 10rpx; color: var(--color-text-secondary); font-size: 24rpx; }
-.summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16rpx; margin-top: 16rpx; }
-.metric-card { display: flex; min-width: 0; min-height: 128rpx; padding: 24rpx 18rpx; box-sizing: border-box; flex-direction: column; justify-content: space-between; animation: card-enter var(--transition-standard) both; }
+.asset-icon { display: flex; align-items: center; justify-content: center; width: 68rpx; height: 68rpx; border-radius: 22rpx; background: rgba(255, 255, 255, .72); }
+.asset-value { display: block; margin-top: 24rpx; overflow: hidden; color: var(--color-text); font-size: 64rpx; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.asset-foot { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 10rpx; }
+.asset-note { color: var(--color-text-secondary); font-size: 22rpx; }
+.asset-pill { flex: none; padding: 8rpx 14rpx; border: 1rpx solid #e3eefb; border-radius: var(--radius-pill); color: var(--color-primary); background: rgba(255, 255, 255, .78); font-size: 22rpx; }
+.summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14rpx; margin-top: 14rpx; }
+.metric-card { display: flex; min-width: 0; min-height: 124rpx; padding: 22rpx 16rpx; box-sizing: border-box; flex-direction: column; justify-content: space-between; border-radius: 28rpx; animation: card-enter var(--transition-standard) both; }
 .metric-label { color: var(--color-text-secondary); font-size: 22rpx; }
-.metric-value { display: block; overflow: hidden; margin-top: 16rpx; color: var(--color-text); font-size: 25rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.metric-value { display: block; overflow: hidden; margin-top: 14rpx; color: var(--color-text); font-size: 26rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .metric-card.expense .metric-value { color: var(--color-danger); }
 .metric-card.income .metric-value { color: var(--color-success); }
-.metric-card.balance .metric-value { color: var(--color-primary); }
-.quick-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16rpx; margin-top: 16rpx; }
-.quick-item { display: flex; min-width: 0; height: 142rpx; margin: 0; padding: 18rpx 8rpx; flex-direction: column; align-items: center; justify-content: center; color: var(--color-text); font-size: 24rpx; line-height: 1; }
-.quick-icon { display: flex; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; margin-bottom: 14rpx; border-radius: 22rpx; }
+.metric-card.balance .metric-value { color: var(--color-text); }
+.quick-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14rpx; margin-top: 14rpx; }
+.excel-import { display: flex; align-items: center; gap: 18rpx; margin-top: 14rpx; padding: 22rpx 26rpx; }
+.excel-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.quick-item { display: flex; min-width: 0; height: 136rpx; margin: 0; padding: 16rpx 8rpx; flex-direction: column; align-items: center; justify-content: center; border-radius: 28rpx; color: var(--color-text); font-size: 24rpx; line-height: 1; }
+.quick-icon { display: flex; align-items: center; justify-content: center; width: 60rpx; height: 60rpx; margin-bottom: 12rpx; border-radius: 20rpx; }
 .quick-icon.blue { background: var(--color-primary-soft); }
 .quick-icon.green { background: #eaf8ee; }
 .quick-icon.orange { background: #fff4df; }
 .quick-icon.violet { background: var(--color-accent-soft); }
-.section { margin-top: 16rpx; padding: 32rpx; }
-.section-head { margin-bottom: 24rpx; }
+.section { margin-top: 14rpx; padding: 28rpx; }
+.section-head { margin-bottom: 20rpx; }
 .section-head > view { display: flex; min-width: 0; flex-direction: column; }
-.section-title { color: var(--color-text); font-size: 32rpx; font-weight: 600; }
-.section-subtitle { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 23rpx; }
-.budget-row + .budget-row { margin-top: 24rpx; }
-.budget-copy { gap: 20rpx; }
-.budget-name { overflow: hidden; font-size: 27rpx; text-overflow: ellipsis; white-space: nowrap; }
+.recent-toggle { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; min-height: 72rpx; }
+.recent-heading { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.recent-action { display: flex; flex: none; align-items: center; gap: 10rpx; color: var(--color-text-secondary); font-size: 24rpx; }
+.recent-content { margin-top: 18rpx; }
+.section-title { color: var(--color-text); font-size: 30rpx; font-weight: 600; }
+.section-subtitle { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 22rpx; }
+.budget-row + .budget-row { margin-top: 20rpx; }
+.budget-copy { gap: 18rpx; }
+.budget-name { overflow: hidden; font-size: 26rpx; text-overflow: ellipsis; white-space: nowrap; }
 .budget-detail { flex: none; color: var(--color-text-secondary); font-size: 22rpx; }
-.track { height: 12rpx; margin-top: 14rpx; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-surface-muted); }
+.track { height: 10rpx; margin-top: 12rpx; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-surface-muted); }
 .fill { height: 100%; border-radius: var(--radius-pill); background: var(--color-primary); transition: width var(--transition-standard); }
 .fill.warning { background: var(--color-warning); }
 .fill.blocked { background: var(--color-danger); }
-.insight-card { gap: 20rpx; margin-top: 16rpx; padding: 28rpx 32rpx; }
-.insight-icon { display: flex; width: 72rpx; height: 72rpx; flex: none; align-items: center; justify-content: center; border-radius: 24rpx; background: var(--color-accent-soft); }
+.insight-card { gap: 18rpx; margin-top: 14rpx; padding: 26rpx 28rpx; }
+.insight-icon { display: flex; width: 68rpx; height: 68rpx; flex: none; align-items: center; justify-content: center; border-radius: 22rpx; background: var(--color-accent-soft); }
 .insight-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
-.text-button { width: auto; height: 56rpx; margin: 0; padding: 0 4rpx; color: var(--color-primary); background: transparent; font-size: 24rpx; line-height: 56rpx; }
-.bill-row { min-height: 104rpx; border-bottom: 1rpx solid var(--color-border-muted); }
+.text-button { width: auto; height: var(--button-height-sm); margin: 0; padding: 0 8rpx; border: 0; color: var(--color-primary); background: transparent; font-size: var(--button-font-sm); font-weight: 600; line-height: var(--button-height-sm); }
+.bill-row { min-height: 96rpx; border-bottom: 1rpx solid var(--color-border-muted); }
 .bill-row:last-of-type { border-bottom: 0; }
-.category-mark { display: flex; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; flex: none; border-radius: 22rpx; color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
-.bill-copy { display: flex; min-width: 0; flex: 1; margin-left: 18rpx; flex-direction: column; }
-.bill-category { overflow: hidden; font-size: 27rpx; text-overflow: ellipsis; white-space: nowrap; }
+.category-mark { display: flex; align-items: center; justify-content: center; width: 58rpx; height: 58rpx; flex: none; border-radius: 20rpx; color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
+.bill-copy { display: flex; min-width: 0; flex: 1; margin-left: 16rpx; flex-direction: column; }
+.bill-category { overflow: hidden; font-size: 26rpx; text-overflow: ellipsis; white-space: nowrap; }
 .bill-note { margin-top: 6rpx; overflow: hidden; color: var(--color-text-secondary); font-size: 22rpx; text-overflow: ellipsis; white-space: nowrap; }
-.bill-amount { max-width: 220rpx; margin-left: 16rpx; overflow: hidden; color: var(--color-text); font-size: 27rpx; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.bill-amount { max-width: 220rpx; margin-left: 16rpx; overflow: hidden; color: var(--color-text); font-size: 26rpx; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .bill-amount.expense { color: var(--color-danger); }
 .bill-amount.income { color: var(--color-success); }
 .empty-state { display: flex; min-height: 150rpx; flex-direction: column; align-items: center; justify-content: center; color: var(--color-text-secondary); font-size: 24rpx; }

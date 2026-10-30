@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createSSEConnection } from "./sse";
+import { createSSEConnection, decodeUtf8Bytes } from "./sse";
 
 describe("SSE HTTP 错误处理", () => {
   beforeEach(() => {
@@ -28,6 +28,17 @@ describe("SSE HTTP 错误处理", () => {
     expect(onError).toHaveBeenCalledOnce();
     expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
     expect(onError.mock.calls[0][0].message).toBe("操作过于频繁，请稍后再试");
+  });
+
+  it("汉字被拆到两个 chunk 时不乱码", () => {
+    const bytes = Array.from(new TextEncoder().encode("午餐"));
+    const first = decodeUtf8Bytes(bytes.slice(0, 2));
+    const second = decodeUtf8Bytes([...first.rest, ...bytes.slice(2)]);
+
+    expect(first.text).toBe("");
+    expect(first.rest).toHaveLength(2);
+    expect(second.text).toBe("午餐");
+    expect(second.rest).toEqual([]);
   });
 
   it("连接关闭后忽略迟到的 HTTP 错误", () => {

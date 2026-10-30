@@ -17,6 +17,14 @@ describe("Apple HIG 页面视觉回归", () => {
     expect(source).toContain("本月结余");
   });
 
+  it("首页采用 B 的浅色卡片资产区和预算胶囊", () => {
+    const source = pageSource("index");
+    expect(source).toContain('class="asset-foot"');
+    expect(source).toContain('class="asset-pill"');
+    expect(source).toContain("linear-gradient(135deg");
+    expect(source).toContain("var(--shadow-card)");
+  });
+
   it("核心页面不再出现赛博终端文案和样式名", () => {
     const source = ["index", "transcribe", "stats"].map(pageSource).join("\n");
     expect(source).not.toMatch(/cyber|terminal|neon|scanline|glass-panel/i);
@@ -36,7 +44,33 @@ describe("Apple HIG 页面视觉回归", () => {
     const source = pageSource("transcribe");
     expect(source).toContain('v-if="parsing" class="message-row assistant"');
     expect(source).toContain('<view class="typing-dots"><text /><text /><text /></view>');
-    expect(source).toContain('v-if="!parsing && !parsed" class="composer-shell"');
+    expect(source).toContain('v-if="!parsing" class="composer-shell"');
+  });
+
+  it("追问未完成时禁止确认，避免过滤后的下标错位", () => {
+    const source = pageSource("transcribe");
+    expect(source).toMatch(/if \(clarificationQuestion\.value\) return false/);
+    // 单笔与多笔两个确认按钮都必须依赖 canConfirm，而非只看 parsedItems
+    expect(source.split(':disabled="!canConfirm || saving"').length - 1).toBe(2);
+    // saveBills 自身也复用 canConfirm，防止绕过按钮直接调用时提前入账
+    expect(source).toMatch(/if \(!parsedItems\.value\.length \|\| !canConfirm\.value\) return;/);
+    // 未完成项在 normalize 阶段被丢弃，正是确认键会错位的来源
+    expect(source).toMatch(/\.filter\(\(item\): item is ParsedBill => Boolean\(item\)\)/);
+  });
+
+  it("共享账本成员不足两人时禁用 AA 并给出提示", () => {
+    const source = pageSource("transcribe");
+    expect(source).toContain("aaAvailable");
+    expect(source).toContain(':disabled="!aaAvailable"');
+    expect(source).toContain("至少需要两名成员才能 AA");
+  });
+
+  it("记账页保留多笔确认列表和逐笔编辑", () => {
+    const source = pageSource("transcribe");
+    expect(source).toContain("parsedItems");
+    expect(source).toContain("识别到 {{ parsedItems.length }} 笔");
+    expect(source).toContain("确认全部 {{ parsedItems.length }} 笔");
+    expect(source).toContain("batch-item");
   });
 
   it("统计页保留趋势、分类和排行空状态", () => {

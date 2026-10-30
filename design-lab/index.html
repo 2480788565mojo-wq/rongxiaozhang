@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>荣小账 · 5 套 UI 方向</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 36px 36px 28px;
+      color: #1d1d1f;
+      background: #f2f3f5;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    h1 { margin: 0; font-size: 30px; letter-spacing: -.5px; }
+    .intro { max-width: 760px; margin: 10px 0 24px; color: #6e6e73; font-size: 14px; line-height: 1.7; }
+    .grid { display: flex; gap: 18px; overflow-x: auto; padding-bottom: 14px; }
+    .card { flex: none; width: 286px; }
+    .frame {
+      width: 286px;
+      height: 619px;
+      overflow: hidden;
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 0 18px 44px rgba(0, 0, 0, .14), 0 0 0 1px rgba(0, 0, 0, .04);
+    }
+    .frame iframe {
+      width: 375px;
+      height: 812px;
+      border: 0;
+      transform: scale(.7627);
+      transform-origin: 0 0;
+    }
+    .meta { padding: 14px 2px 0; }
+    .meta b { display: block; font-size: 14px; }
+    .meta p { margin: 5px 0 8px; color: #6e6e73; font-size: 12px; line-height: 1.55; }
+    .meta a { color: #4a90e2; font-size: 12px; text-decoration: none; }
+    .meta a:hover { text-decoration: underline; }
+    .note { margin-top: 18px; color: #86868b; font-size: 12px; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <h1>荣小账 · 5 套 UI 方向</h1>
+  <p class="intro">
+    同一份首页内容，5 套视觉规则。先看整体气质，再点“单独打开”看细节。<br>
+    这是选风格用的 HTML 样稿，不是最终小程序；数据为示例，顶部胶囊是微信原生控件的占位。
+  </p>
+
+  <div class="grid">
+    <article class="card">
+      <div class="frame"><iframe src="a-wechat.html" title="A 微信原生清爽"></iframe></div>
+      <div class="meta">
+        <b>A · 微信原生清爽</b>
+        <p>白底、微信绿、弱阴影、少卡片；最像原生小程序，审核风险最低。</p>
+        <a href="a-wechat.html" target="_blank">单独打开 →</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="frame"><iframe src="b-apple.html" title="B Apple 浅色卡片"></iframe></div>
+      <div class="meta">
+        <b>B · Apple 浅色卡片</b>
+        <p>保留现有 Apple 浅色气质，减少卡片堆叠，层级更清楚。</p>
+        <a href="b-apple.html" target="_blank">单独打开 →</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="frame"><iframe src="c-editorial.html" title="C 中文账本编辑风"></iframe></div>
+      <div class="meta">
+        <b>C · 中文账本 / 编辑</b>
+        <p>米白纸感、宋体标题、细线分隔；最像一本账，辨识度最高。</p>
+        <a href="c-editorial.html" target="_blank">单独打开 →</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="frame"><iframe src="d-dark.html" title="D 深色数据"></iframe></div>
+      <div class="meta">
+        <b>D · 深色数据</b>
+        <p>深灰底、单一荧光绿、数据感强；适合统计和夜间。</p>
+        <a href="d-dark.html" target="_blank">单独打开 →</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="frame"><iframe src="e-soft.html" title="E 柔和亲和"></iframe></div>
+      <div class="meta">
+        <b>E · 柔和亲和</b>
+        <p>奶油底、珊瑚色、大圆角；亲和，适合养成记账习惯。</p>
+        <a href="e-soft.html" target="_blank">单独打开 →</a>
+      </div>
+    </article>
+  </div>
+
+  <p class="note">
+    说明：A/B/C/D/E 只是视觉方向，不代表最终功能。选定后我会用对应的小程序规则（rpx、胶囊避让、5 个 tab、审核红线）落到真实页面。
+  </p>
+</body>
+</html>

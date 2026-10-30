@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E · 柔和亲和</title>
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/themes.css">
+</head>
+<body class="theme-e">
+  <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-book" viewBox="0 0 24 24">
+      <path d="M5 3.5h13.5A2.5 2.5 0 0 1 21 6v14H7.5A2.5 2.5 0 0 1 5 17.5z"/>
+      <path d="M5 17.5A2.5 2.5 0 0 1 7.5 15H21"/>
+    </symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24">
+      <rect x="3" y="6" width="18" height="12" rx="2.5"/>
+      <path d="M3 9.5h18"/>
+      <path d="M16 13.5h2.5"/>
+    </symbol>
+    <symbol id="i-pie" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8"/>
+      <path d="M12 4v8h8"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24">
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v7a2.5 2.5 0 0 1-2.5 2.5H9l-5 4z"/>
+    </symbol>
+    <symbol id="i-home" viewBox="0 0 24 24">
+      <path d="M3.5 10.5 12 3l8.5 7.5"/>
+      <path d="M5.5 9.5V21h13V9.5"/>
+      <path d="M9.5 21v-6h5v6"/>
+    </symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24">
+      <path d="M4 20V10"/>
+      <path d="M10 20V4"/>
+      <path d="M16 20v-7"/>
+      <path d="M22 20H2"/>
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 24 24">
+      <path d="M8 6h12"/>
+      <path d="M8 12h12"/>
+      <path d="M8 18h12"/>
+      <circle cx="4" cy="6" r="1"/>
+      <circle cx="4" cy="12" r="1"/>
+      <circle cx="4" cy="18" r="1"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+    </symbol>
+  </svg>
+
+  <main class="stage">
+    <section class="phone" aria-label="荣小账首页样稿">
+      <div class="status">
+        <span>9:41</span>
+        <span class="capsule"><b>···</b><b>◎</b></span>
+      </div>
+
+      <div class="screen">
+        <header class="topbar">
+          <img class="logo" src="assets/logo.jpg" alt="荣小账 logo">
+          <div class="brand">
+            <strong>荣小账</strong>
+            <span>今天也要好好生活</span>
+          </div>
+          <span class="ledger">我的账本</span>
+        </header>
+
+        <section class="asset" aria-label="总资产">
+          <div class="asset-head"><span>总资产</span><span>2026年10月</span></div>
+          <div class="asset-value">¥12,860<span class="cents">.50</span></div>
+          <div class="asset-foot">
+            <span>本月结余 <b class="up">+¥5,219.50</b></span>
+            <span class="pill">预算 62%</span>
+          </div>
+          <svg class="spark" viewBox="0 0 90 38" aria-hidden="true">
+            <path d="M1 31 L11 27 L21 29 L31 19 L41 22 L51 13 L61 16 L71 7 L89 10"/>
+            <circle cx="89" cy="10" r="2.2" fill="currentColor" stroke="none"/>
+          </svg>
+        </section>
+
+        <section class="metrics" aria-label="本月收支">
+          <div><span>本月支出</span><b class="expense">¥3,280.50</b></div>
+          <div><span>本月收入</span><b class="income">¥8,500.00</b></div>
+          <div><span>本月结余</span><b>¥5,219.50</b></div>
+        </section>
+
+        <nav class="quick" aria-label="快捷入口">
+          <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-book"/></svg><span>账本</span></a>
+          <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-wallet"/></svg><span>账户</span></a>
+          <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pie"/></svg><span>预算</span></a>
+          <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chat"/></svg><span>洞察</span></a>
+        </nav>
+
+        <div class="sticker">本月已记 18 笔 · 慢慢来</div>
+
+        <section class="panel budget" aria-label="本月预算">
+          <div class="sec-head">
+            <div><h2>本月预算</h2><p>按分类看还剩多少</p></div>
+            <span class="more">全部 ›</span>
+          </div>
+          <div class="budget-row">
+            <div class="budget-label"><span>餐饮美食</span><small>已用 78%</small></div>
+            <div class="bar"><i style="width:78%"></i></div>
+            <b>¥220</b>
+          </div>
+          <div class="budget-row">
+            <div class="budget-label"><span>交通出行</span><small>已用 45%</small></div>
+            <div class="bar"><i class="warn" style="width:45%"></i></div>
+            <b>¥330</b>
+          </div>
+          <div class="budget-row">
+            <div class="budget-label"><span>购物消费</span><small>已用 92%</small></div>
+            <div class="bar"><i class="danger" style="width:92%"></i></div>
+            <b>¥80</b>
+          </div>
+        </section>
+
+        <section class="panel recent" aria-label="最近记录">
+          <div class="sec-head">
+            <div><h2>最近记录</h2><p>本月 18 笔</p></div>
+            <span class="more">全部 ›</span>
+          </div>
+          <div class="bill">
+            <span class="mark">午</span>
+            <div class="bill-copy"><b>午餐</b><small>餐饮美食 · 微信钱包</small></div>
+            <em class="expense">-28.00</em>
+          </div>
+          <div class="bill">
+            <span class="mark">行</span>
+            <div class="bill-copy"><b>打车</b><small>交通出行 · 支付宝</small></div>
+            <em class="expense">-35.00</em>
+          </div>
+          <div class="bill">
+            <span class="mark">薪</span>
+            <div class="bill-copy"><b>工资到账</b><small>工资收入 · 银行卡</small></div>
+            <em class="income">+8,500.00</em>
+          </div>
+        </section>
+      </div>
+
+      <button class="fab" type="button" aria-label="记一笔">+</button>
+
+      <nav class="tabbar" aria-label="底部导航">
+        <a class="active" href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-home"/></svg><span>首页</span></a>
+        <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart"/></svg><span>统计</span></a>
+        <a href="#" aria-label="记账"><span class="tab-plus">+</span><span>记账</span></a>
+        <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"/></svg><span>账单</span></a>
+        <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg><span>我的</span></a>
+      </nav>
+    </section>
+
+    <p class="caption"><b>E · 柔和亲和</b><span>奶油底、珊瑚色、大圆角；亲和，适合养成记账习惯。</span></p>
+  </main>
+
+  <script>
+    if (location.search.indexOf("shot") !== -1) document.body.classList.add("shot");
+  </script>
+</body>
+</html>

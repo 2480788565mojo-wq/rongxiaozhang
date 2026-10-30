@@ -33,7 +33,7 @@
 
 - **前端**：uni-app (Vue 3 + TypeScript) + uView Plus UI 组件库
 - **数据存储**：纯本地存储（`uni.getStorageSync`），无后端、无云同步
-- **图表**：手写 Canvas API 绘图（uCharts 已安装但未使用）
+- **图表**：ECharts 按需引入（折线/环形/仪表盘）
 - **状态管理**：无 Pinia/Vuex，页面直接调用 `src/utils/store.ts` 函数
 
 ### 1.2 四大业务痛点 → 技术方案映射

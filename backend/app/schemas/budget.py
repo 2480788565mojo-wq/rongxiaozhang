@@ -42,6 +42,7 @@ class BudgetOut(BaseModel):
 
 class BudgetStatus(BaseModel):
     category: str
+    kind: Literal["category", "total"] = "category"
     spent: float = Field(ge=0)
     budget: float = Field(ge=0)
     remaining: float

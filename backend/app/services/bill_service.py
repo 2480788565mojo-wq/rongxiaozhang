@@ -119,8 +119,10 @@ async def get_bill_by_confirmation_session(
             Bill.ledger_id == ledger_id,
             Bill.confirmation_session_id == session_id,
         )
+        .order_by(Bill.id)
     )
-    return result.scalar_one_or_none()
+    # 历史脏数据可能留下重复幂等键；不要因为 MultipleResultsFound 让重试 500。
+    return result.scalars().first()
 
 
 def _equal_share_amounts(amount: Decimal, count: int) -> list[Decimal]:

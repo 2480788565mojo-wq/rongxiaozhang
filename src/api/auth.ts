@@ -18,3 +18,11 @@ export function devLogin(nickname = "H5 测试用户") {
 export function getMe() {
   return api<User>("/auth/me");
 }
+
+export function exportAccount() {
+  return api<Record<string, unknown>>("/auth/export");
+}
+
+export function deleteAccount() {
+  return api<void>("/auth/me", { method: "DELETE" });
+}

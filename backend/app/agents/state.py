@@ -26,16 +26,20 @@ class TransactionState(TypedDict, total=False):
     route_reason: str | None
     agent_messages: list[AgentMessage]
     context_memory: dict[str, Any]
+    available_categories: list[dict[str, str]]
     degraded_agents: list[str]
 
     # Parser output
     parsed: dict | None
+    parsed_items: list[dict]
     missing_fields: list[str]
     clarification_question: str | None
     clarification_round: int
+    clarification_item_index: int
 
     # Guardian output
     budget_check: dict | None
+    budget_checks: list[dict]
     risk_level: RiskLevel
     rule_risk_level: RiskLevel
     ai_risk_level: RiskLevel
@@ -75,12 +79,16 @@ def new_transaction_state(
         "route_reason": None,
         "agent_messages": [],
         "context_memory": {},
+        "available_categories": [],
         "degraded_agents": [],
         "parsed": None,
+        "parsed_items": [],
         "missing_fields": [],
         "clarification_question": None,
         "clarification_round": 0,
+        "clarification_item_index": 0,
         "budget_check": None,
+        "budget_checks": [],
         "risk_level": "safe",
         "rule_risk_level": "safe",
         "ai_risk_level": "safe",
@@ -94,3 +102,11 @@ def new_transaction_state(
         "insight_triggered": False,
         "error": None,
     }
+
+
+def parsed_items_from_state(state: TransactionState) -> list[dict]:
+    """兼容单笔旧状态：优先用列表，没有列表时回退到 parsed。"""
+    items = list(state.get("parsed_items") or [])
+    if not items and state.get("parsed"):
+        items = [state["parsed"]]
+    return items

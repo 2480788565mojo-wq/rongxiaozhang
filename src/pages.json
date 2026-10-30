@@ -100,8 +100,8 @@
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "荣小账",
-		"navigationBarBackgroundColor": "#F7F8FA",
-		"backgroundColor": "#F7F8FA"
+		"navigationBarBackgroundColor": "#E8EFF8",
+		"backgroundColor": "#E8EFF8"
 	},
 	"tabBar": {
 		"color": "#86868B",
@@ -131,5 +131,18 @@
 				"text": "我的"
 			}
 		]
-	}
+	},
+	"subPackages": [
+		{
+			"root": "subpackages/import",
+			"pages": [
+				{
+					"path": "index",
+					"style": {
+						"navigationBarTitleText": "导入 Excel 账单"
+					}
+				}
+			]
+		}
+	]
 }

@@ -4,7 +4,7 @@
     <view v-if="!appStore.aiEnabled" class="manual-guide">
       <image class="guide-logo" src="/static/logo.jpg" mode="aspectFill" />
       <text class="guide-title">记一笔</text>
-      <text class="guide-subtitle">手动填写金额、分类和账户，快速记录每笔收支</text>
+      <text class="guide-subtitle">填写金额、分类和账户，也可语音输入备注</text>
       <button class="primary-button" @click="goManualAdd">开始记账</button>
     </view>
 
@@ -48,7 +48,7 @@
           </view>
         </view>
 
-        <view v-if="sourceText && (parsing || clarificationQuestion || parsed || advisorMessage)" class="message-row user">
+        <view v-if="sourceText && (parsing || clarificationQuestion || parsedItems.length || advisorMessage)" class="message-row user">
           <view class="message-bubble user-bubble"><text>{{ sourceText }}</text></view>
         </view>
 
@@ -76,7 +76,7 @@
           </view>
         </view>
 
-        <view v-if="parsed" class="message-row assistant result-row">
+        <view v-if="parsed && !isMulti" class="message-row assistant result-row">
           <image class="message-avatar" src="/static/logo.jpg" mode="aspectFill" />
           <view class="result-section card">
             <view class="section-heading">
@@ -107,8 +107,11 @@
 
             <view v-if="isSharedExpense" class="share-section">
               <view class="share-heading">
-                <view><text class="share-title">AA 分摊</text><text class="share-subtitle">选择本次参与成员</text></view>
-                <switch :checked="aaEnabled" color="#4A90E2" @change="toggleAA" />
+                <view>
+                  <text class="share-title">AA 分摊</text>
+                  <text class="share-subtitle">{{ aaAvailable ? '选择本次参与成员' : '至少需要两名成员才能 AA' }}</text>
+                </view>
+                <switch :checked="aaEnabled" :disabled="!aaAvailable" color="#4A90E2" @change="toggleAA" />
               </view>
               <checkbox-group v-if="aaEnabled" class="member-list" @change="onMembersChange">
                 <label v-for="member in currentMembers" :key="member.user_id" class="member-row">
@@ -119,12 +122,51 @@
               </checkbox-group>
             </view>
 
-            <button class="confirm-button" :disabled="!canConfirm || saving" :loading="saving" @click="saveBill(false)">确认记账</button>
+            <button class="confirm-button" :disabled="!canConfirm || saving" :loading="saving" @click="saveBills(false)">确认记账</button>
+          </view>
+        </view>
+
+        <view v-else-if="isMulti" class="message-row assistant result-row">
+          <image class="message-avatar" src="/static/logo.jpg" mode="aspectFill" />
+          <view class="result-section card batch-card">
+            <view class="section-heading">
+              <view>
+                <text class="section-title">识别到 {{ parsedItems.length }} 笔</text>
+                <text class="section-subtitle">请核对后一次确认，逐笔入账</text>
+              </view>
+              <view class="ready-tag"><u-icon name="checkmark" color="#34C759" size="14" /><text>已解析</text></view>
+            </view>
+
+            <view v-for="(item, index) in parsedItems" :key="index" class="batch-item">
+              <view class="batch-item-head">
+                <text class="batch-index">第 {{ index + 1 }} 笔</text>
+                <text class="batch-amount numeric">¥{{ Number(item.amount || 0).toFixed(2) }}</text>
+              </view>
+              <view class="type-segment batch-type">
+                <button class="segment-button expense-option" :class="{ active: item.type === 'expense' }" @click="item.type = 'expense'">支出</button>
+                <button class="segment-button income-option" :class="{ active: item.type === 'income' }" @click="item.type = 'income'">收入</button>
+              </view>
+              <label class="field-row amount-row">
+                <text class="field-label">金额</text>
+                <view class="amount-input-wrap">
+                  <text class="currency">¥</text>
+                  <input v-model.number="item.amount" class="amount-input numeric" type="digit" />
+                </view>
+              </label>
+              <label class="field-row"><text class="field-label">分类</text><input v-model="item.category" class="field-input" placeholder="请填写分类" /></label>
+              <label class="field-row"><text class="field-label">细分</text><input v-model="item.subcategory" class="field-input" placeholder="选填" /></label>
+              <label class="field-row"><text class="field-label">账户</text><input v-model="item.account" class="field-input" placeholder="选填" /></label>
+              <label class="field-row"><text class="field-label">日期</text><input v-model="item.bill_date" class="field-input numeric" placeholder="YYYY-MM-DD" /></label>
+              <label class="field-row"><text class="field-label">备注</text><input v-model="item.note" class="field-input" placeholder="选填" /></label>
+            </view>
+
+            <view v-if="isSharedLedger" class="batch-note">多笔账单暂不支持 AA 分摊；确认后可到账单详情逐笔处理。</view>
+            <button class="confirm-button" :disabled="!canConfirm || saving" :loading="saving" @click="saveBills(false)">确认全部 {{ parsedItems.length }} 笔</button>
           </view>
         </view>
       </view>
 
-      <view v-if="!parsing && !parsed" class="composer-shell">
+      <view v-if="!parsing" class="composer-shell">
         <view v-if="voiceStatus" class="voice-status" :class="{ active: voiceRecording }">
           <view v-if="voiceRecording" class="recording-dot" />
           <text>{{ voiceStatus }}</text>
@@ -137,18 +179,19 @@
             :disabled="saving"
             :aria-label="voiceButtonLabel"
             :title="voiceButtonLabel"
-            @click="toggleVoiceInput"
+            @click="handleVoiceButton"
           >
             <u-icon :name="voiceRecording ? 'close' : 'mic'" color="currentColor" size="22" />
           </button>
-          <textarea v-model="rawInput" class="speech-input" :placeholder="clarificationQuestion || '输入一笔收支…'" :maxlength="500" auto-height />
+          <textarea v-model="rawInput" :focus="rawInputFocused" @blur="rawInputFocused = false" class="speech-input" :placeholder="clarificationQuestion || '输入一笔收支…'" :maxlength="500" auto-height />
           <button class="analyze-button" :class="{ 'is-idle': !rawInput.trim() }" aria-label="发送并解析" title="发送并解析" @click="analyze">
             <u-icon name="arrow-upward" color="#FFFFFF" size="21" />
           </button>
         </view>
-      </view>
+          </view>
     </template>
     </template>
+    <BudgetAlert />
   </view>
 </template>
 
@@ -157,15 +200,20 @@ import { computed, onUnmounted, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { ApiError, getStoredToken } from "@/api/client";
 import { confirmBill, transcribeStreamUrl } from "@/api/bills";
+import BudgetAlert from "@/components/BudgetAlert.vue";
 import { useBillStore } from "@/stores/bill";
+import { useBudgetStore } from "@/stores/budget";
 import { useLedgerStore } from "@/stores/ledger";
 import { useUserStore } from "@/stores/user";
 import { useAppStore } from "@/stores/app";
 import type { ParsedBill, SSEEvent } from "@/types";
+import { buildBatchConfirmKey } from "@/utils/bill-batch";
 import { createSSEConnection, type SSEConnection } from "@/utils/sse";
-import { joinSpeechText, speechErrorMessage } from "@/utils/speech";
+import { useVoiceInput } from "@/composables/useVoiceInput";
+import { keyboardVoiceHint } from "@/utils/speech";
 
 const userStore = useUserStore();
+const budgetStore = useBudgetStore();
 const ledgerStore = useLedgerStore();
 const billStore = useBillStore();
 const appStore = useAppStore();
@@ -174,31 +222,40 @@ const sourceText = ref("");
 const sessionId = ref("");
 const clarificationQuestion = ref("");
 const parsed = ref<ParsedBill | null>(null);
+const parsedItems = ref<ParsedBill[]>([]);
 const advisorMessage = ref<{ summary: string; actions: string[] } | null>(null);
 const parsing = ref(false);
 const saving = ref(false);
 const aaEnabled = ref(false);
 const selectedShareIds = ref<number[]>([]);
-const voiceRecording = ref(false);
-const voiceStatus = ref("");
+const voice = useVoiceInput(rawInput);
+const voiceRecording = voice.busy;
+const voiceStatus = voice.status;
+const rawInputFocused = ref(false);
 let stream: SSEConnection | null = null;
-let speechBaseText = "";
-let speechDraftText = "";
-let h5Recognition: any = null;
-let speechSequence = 0;
-let speechRequest = 0;
-let activeSpeechSession = 0;
 
-const voiceButtonLabel = computed(() => voiceRecording.value ? "停止语音输入" : "开始语音输入");
+const voiceButtonLabel = computed(() => {
+  // #ifdef MP-WEIXIN
+  return "使用键盘语音输入";
+  // #endif
+  return voiceRecording.value ? "停止语音输入" : "开始语音输入";
+});
 
 const ledgerNames = computed(() => ledgerStore.ledgers.map((item) => item.name));
 const ledgerIndex = computed(() => Math.max(0, ledgerStore.ledgers.findIndex((item) => item.id === ledgerStore.currentId)));
 const currentLedgerName = computed(() => ledgerStore.current?.name || "请选择账本");
 const currentMembers = computed(() => ledgerStore.current?.members || []);
-const isSharedExpense = computed(() => ledgerStore.current?.type === "shared" && parsed.value?.type === "expense");
+const isSharedLedger = computed(() => ledgerStore.current?.type === "shared");
+const isMulti = computed(() => parsedItems.value.length > 1);
+const aaAvailable = computed(() => currentMembers.value.length >= 2);
+const isSharedExpense = computed(() => !isMulti.value && isSharedLedger.value && parsed.value?.type === "expense");
 const canConfirm = computed(() => {
-  const value = parsed.value;
-  return Boolean(value?.type && value.amount && value.category && value.bill_date) && (!aaEnabled.value || selectedShareIds.value.length >= 2);
+  const items = parsedItems.value;
+  if (!items.length) return false;
+  if (clarificationQuestion.value) return false;
+  const complete = items.every((item) => Boolean(item.type && item.amount && item.category && item.bill_date));
+  if (!complete) return false;
+  return isMulti.value ? true : (!aaEnabled.value || selectedShareIds.value.length >= 2);
 });
 
 async function login() {
@@ -219,136 +276,16 @@ function goManualAdd() {
   uni.navigateTo({ url: "/pages/add/index" });
 }
 
-function updateSpeechDraft(text: string, speechSession = activeSpeechSession) {
-  if (!speechSession || speechSession !== activeSpeechSession) return;
-  speechDraftText = text.trim();
-  rawInput.value = joinSpeechText(speechBaseText, speechDraftText).slice(0, 500);
-}
-
-function finishVoiceInput(finalText?: string, speechSession = activeSpeechSession) {
-  if (!speechSession || speechSession !== activeSpeechSession) return;
-  if (finalText?.trim()) updateSpeechDraft(finalText, speechSession);
-  activeSpeechSession = 0;
-  voiceRecording.value = false;
-  voiceStatus.value = speechDraftText ? "语音已转成文字，可继续修改" : "";
-}
-
-function handleVoiceError(code: string, speechSession = activeSpeechSession) {
-  if (speechSession && speechSession !== activeSpeechSession) return;
-  if (speechSession) {
-    activeSpeechSession = 0;
-  }
-  voiceRecording.value = false;
-  voiceStatus.value = "";
-  uni.showToast({ title: speechErrorMessage(code), icon: "none", duration: 3000 });
-}
-
-function beginSpeechSession() {
-  speechBaseText = rawInput.value;
-  speechDraftText = "";
-  parsed.value = null;
-  voiceStatus.value = "正在听，请开始说话…";
-  activeSpeechSession = ++speechSequence;
-  voiceRecording.value = true;
-  return activeSpeechSession;
-}
-
-// #ifdef H5
-function startH5VoiceInput() {
-  const target = window as any;
-  const Recognition = target.SpeechRecognition || target.webkitSpeechRecognition;
-  if (!Recognition) {
-    handleVoiceError("unsupported");
-    return;
-  }
-  const requestId = ++speechRequest;
-  voiceStatus.value = "正在请求麦克风权限…";
-  const recognition = new Recognition();
-  let speechSession = 0;
-  h5Recognition = recognition;
-  recognition.lang = "zh-CN";
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.onstart = () => {
-    if (requestId !== speechRequest || h5Recognition !== recognition) {
-      try { recognition.stop(); } catch { /* The recognition request was already closed. */ }
-      return;
-    }
-    speechSession = beginSpeechSession();
-  };
-  recognition.onresult = (event: any) => {
-    let finalText = "";
-    let interimText = "";
-    for (let index = 0; index < event.results.length; index += 1) {
-      const text = event.results[index][0]?.transcript || "";
-      if (event.results[index].isFinal) finalText += text;
-      else interimText += text;
-    }
-    updateSpeechDraft(`${finalText}${interimText}`, speechSession);
-  };
-  recognition.onerror = (event: any) => {
-    if (h5Recognition === recognition) h5Recognition = null;
-    if (speechSession || requestId === speechRequest) handleVoiceError(event.error || "unknown", speechSession);
-  };
-  recognition.onend = () => {
-    if (h5Recognition === recognition) h5Recognition = null;
-    finishVoiceInput(undefined, speechSession);
-  };
-  try {
-    recognition.start();
-  } catch {
-    if (h5Recognition === recognition) h5Recognition = null;
-    handleVoiceError("unknown", speechSession);
-  }
-}
-// #endif
-
-// #ifdef MP-WEIXIN
-function startWechatVoiceInput() {
-  uni.showToast({ title: "当前版本暂不支持语音输入", icon: "none" });
-}
-// #endif
-
-function startVoiceInput() {
-  if (activeSpeechSession || h5Recognition) return;
-  // #ifdef H5
-  startH5VoiceInput();
-  // #endif
+function stopVoiceInput(showStatus = true) { if (showStatus) voice.stop(); else voice.cancel(); }
+function toggleVoiceInput() { voice.toggle(); }
+function handleVoiceButton() {
   // #ifdef MP-WEIXIN
-  startWechatVoiceInput();
+  rawInputFocused.value = true;
+  uni.showToast({ title: keyboardVoiceHint(), icon: 'none', duration: 3000 });
   // #endif
-  // #ifndef H5
   // #ifndef MP-WEIXIN
-  handleVoiceError("unsupported");
+  toggleVoiceInput();
   // #endif
-  // #endif
-}
-
-function stopVoiceInput(showStatus = true) {
-  const speechSession = activeSpeechSession;
-  const recognition = h5Recognition;
-  speechRequest += 1;
-  voiceRecording.value = false;
-  if (!showStatus) {
-    activeSpeechSession = 0;
-    voiceStatus.value = "";
-  } else if (speechSession) {
-    voiceStatus.value = "正在完成语音识别…";
-  }
-  if (!speechSession && !recognition) {
-    if (!showStatus) voiceStatus.value = "";
-    return;
-  }
-  try {
-    recognition?.stop();
-  } catch {
-    if (showStatus) finishVoiceInput(undefined, speechSession);
-  }
-}
-
-function toggleVoiceInput() {
-  if (voiceRecording.value) stopVoiceInput();
-  else startVoiceInput();
 }
 
 function onLedgerChange(event: any) {
@@ -371,22 +308,82 @@ function normalizeParsed(data: Partial<ParsedBill>): ParsedBill | null {
   };
 }
 
+function normalizeItems(rawItems: unknown): ParsedBill[] {
+  if (!Array.isArray(rawItems)) return [];
+  return rawItems
+    .map((item) => normalizeParsed((item || {}) as Partial<ParsedBill>))
+    .filter((item): item is ParsedBill => Boolean(item));
+}
+
+function commitParsedItems(items: ParsedBill[]) {
+  if (!items.length) return;
+  parsedItems.value = items;
+  parsed.value = items[0];
+}
+
+function applyParsedItems(rawItems: unknown) {
+  const normalized = normalizeItems(rawItems);
+  if (!normalized.length) return;
+  commitParsedItems(normalized);
+}
+
+function askDraftMode(newItems: ParsedBill[], incomingSession: string) {
+  const previousCount = parsedItems.value.length;
+  uni.showModal({
+    title: "这些账怎么处理？",
+    content: `当前还有 ${previousCount} 笔未确认，新解析了 ${newItems.length} 笔。追加会加到末尾；新批次会替换当前草稿。`,
+    confirmText: "追加",
+    cancelText: "新批次",
+    success: (result) => {
+      if (result.confirm) {
+        // 追加保留旧 session，已保存的旧条目仍能被幂等键识别。
+        commitParsedItems([...parsedItems.value, ...newItems]);
+        return;
+      }
+      // 新批次必须换 epoch，避免复用旧批次已保存的 session:index。
+      sessionId.value = `${incomingSession || sessionId.value}-r${Date.now()}`;
+      commitParsedItems(newItems);
+    },
+    fail: () => {
+      // 不把 session 指向未确认的新解析，避免旧草稿用错键。
+      uni.showToast({ title: "未选择，已保留原草稿", icon: "none" });
+    },
+  });
+}
+
 function handleStreamEvent(message: SSEEvent) {
   const data = message.data as any;
   if (message.event === "parsed") {
-    sessionId.value = data.session_id || sessionId.value;
-    const normalized = normalizeParsed(data.parsed || {});
-    if (normalized) parsed.value = normalized;
+    const incomingSession = data.session_id || sessionId.value;
+    const rawItems = Array.isArray(data.items) && data.items.length
+      ? data.items
+      : (data.parsed ? [data.parsed] : []);
+    const normalized = normalizeItems(rawItems);
+    // 追问补全不是新的一批，不能弹“追加/新批次”。
+    if (
+      !clarificationQuestion.value
+      && parsedItems.value.length > 0
+      && normalized.length > 0
+    ) {
+      askDraftMode(normalized, incomingSession);
+    } else {
+      sessionId.value = incomingSession;
+      applyParsedItems(rawItems);
+    }
   }
   if (message.event === "clarify") {
     clarificationQuestion.value = data.question;
     sessionId.value = data.session_id;
     rawInput.value = "";
+    // 保留已经解析好的条目，只让用户补当前缺失的那一笔。
     parsing.value = false;
     stream?.close();
   }
   if (message.event === "awaiting_confirmation") {
     clarificationQuestion.value = "";
+    if (Array.isArray(data.items) && data.items.length && !parsedItems.value.length) {
+      applyParsedItems(data.items);
+    }
     if (data.advice?.summary) {
       advisorMessage.value = {
         summary: data.advice.summary,
@@ -435,43 +432,79 @@ function analyze() {
 }
 
 function toggleAA(event: any) {
-  aaEnabled.value = Boolean(event.detail.value);
-  selectedShareIds.value = aaEnabled.value ? currentMembers.value.map((member) => member.user_id) : [];
+  const enabled = Boolean(event.detail.value);
+  if (enabled && !aaAvailable.value) {
+    aaEnabled.value = false;
+    uni.showToast({ title: "至少需要两名成员才能 AA", icon: "none" });
+    return;
+  }
+  aaEnabled.value = enabled;
+  selectedShareIds.value = enabled
+    ? currentMembers.value.map((member) => member.user_id)
+    : [];
 }
 
 function onMembersChange(event: any) {
   selectedShareIds.value = (event.detail.value as string[]).map(Number);
 }
 
-async function saveBill(force: boolean) {
-  if (!parsed.value || !canConfirm.value) return;
+function confirmParsedItem(item: ParsedBill, index: number, force: boolean) {
+  const key = buildBatchConfirmKey(
+    sessionId.value,
+    index,
+    parsedItems.value.length,
+  );
+  return confirmBill({
+    ledger_id: ledgerStore.currentId,
+    session_id: key.session_id,
+    raw_input: sourceText.value.slice(0, 500),
+    parsed: item,
+    share_user_ids: !isMulti.value && aaEnabled.value ? selectedShareIds.value : [],
+    is_batch_item: key.is_batch_item,
+    force,
+  });
+}
+
+async function saveBills(force = false) {
+  if (!parsedItems.value.length || !canConfirm.value) return;
+  const items = [...parsedItems.value];
   saving.value = true;
+  let saved = 0;
   try {
-    const bill = await confirmBill({
-      ledger_id: ledgerStore.currentId,
-      session_id: sessionId.value,
-      raw_input: sourceText.value,
-      parsed: parsed.value,
-      share_user_ids: aaEnabled.value ? selectedShareIds.value : [],
-      force,
-    });
-    billStore.prepend(bill);
-    uni.showToast({ title: "记账成功", icon: "success" });
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      try {
+        const bill = await confirmParsedItem(item, index, force);
+        billStore.prepend(bill);
+        saved += 1;
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.statusCode !== 409 || force) throw error;
+        const data = error.data as any;
+        const check = data?.budget_check || {};
+        const riskLevel = data?.status === "blocked" ? "blocked" : "warning";
+        const confirmed = await new Promise<boolean>((resolve) => {
+          budgetStore.showAlert(
+            {
+              ...check,
+              risk_level: check.risk_level || riskLevel,
+              message: data?.message,
+            },
+            resolve,
+          );
+        });
+        if (!confirmed) {
+          uni.showToast({ title: `已记 ${saved} 笔，剩余未记`, icon: "none" });
+          return;
+        }
+        const bill = await confirmParsedItem(item, index, true);
+        billStore.prepend(bill);
+        saved += 1;
+      }
+    }
+    uni.showToast({ title: items.length > 1 ? `已记 ${items.length} 笔` : "记账成功", icon: "success" });
     resetForm();
   } catch (error) {
-    if (error instanceof ApiError && error.statusCode === 409) {
-      const data = error.data as any;
-      uni.showModal({
-        title: data?.status === "blocked" ? "预算已超限" : "预算提醒",
-        content: data?.message || "确定仍然记账吗？",
-        confirmText: "仍然记账",
-        success: (result) => {
-          if (result.confirm) void saveBill(true);
-        },
-      });
-    } else {
-      uni.showToast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
-    }
+    uni.showToast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
   } finally {
     saving.value = false;
   }
@@ -484,6 +517,7 @@ function resetForm() {
   sessionId.value = "";
   clarificationQuestion.value = "";
   parsed.value = null;
+  parsedItems.value = [];
   advisorMessage.value = null;
   aaEnabled.value = false;
   selectedShareIds.value = [];
@@ -502,33 +536,33 @@ onUnmounted(() => {
 
 <style scoped>
 .page { min-height: 100vh; padding: 24rpx 28rpx 340rpx; box-sizing: border-box; }
-.manual-guide { display: flex; margin-top: 180rpx; padding: 64rpx 40rpx; flex-direction: column; align-items: center; text-align: center; }
-.guide-logo { width: 120rpx; height: 120rpx; border-radius: 30rpx; }
-.guide-title { margin-top: 32rpx; color: var(--color-text); font-size: 40rpx; font-weight: 700; }
-.guide-subtitle { margin-top: 16rpx; color: var(--color-text-secondary); font-size: 27rpx; line-height: 1.6; }
-.manual-guide .primary-button { width: 360rpx; margin-top: 48rpx; }
+.manual-guide { display: flex; margin-top: 160rpx; padding: 56rpx 36rpx; flex-direction: column; align-items: center; text-align: center; }
+.guide-logo { width: 116rpx; height: 116rpx; border-radius: 28rpx; }
+.guide-title { margin-top: 28rpx; color: var(--color-text); font-size: 38rpx; font-weight: 700; }
+.guide-subtitle { margin-top: 14rpx; color: var(--color-text-secondary); font-size: 26rpx; line-height: 1.6; }
+.manual-guide .primary-button { width: 340rpx; margin-top: 44rpx; }
 .card { border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.brand-row { display: flex; align-items: center; gap: 16rpx; }
-.brand-logo { width: 72rpx; height: 72rpx; flex: none; border-radius: 20rpx; }
+.brand-row { display: flex; align-items: center; gap: 14rpx; }
+.brand-logo { width: 68rpx; height: 68rpx; flex: none; border-radius: 18rpx; }
 .brand-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
-.brand-name { color: var(--color-text); font-size: 34rpx; font-weight: 600; }
+.brand-name { color: var(--color-text); font-size: 32rpx; font-weight: 600; }
 .brand-status { display: flex; align-items: center; gap: 8rpx; margin-top: 5rpx; color: var(--color-text-secondary); font-size: 22rpx; }
 .brand-status text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status-dot { width: 10rpx; height: 10rpx; flex: none; border-radius: 50%; background: var(--color-success); }
-.ledger-picker { display: flex; align-items: center; gap: 8rpx; padding: 12rpx 16rpx; border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-primary-soft); font-size: 22rpx; }
-.login-panel { display: flex; margin-top: 32rpx; padding: 48rpx 32rpx; flex-direction: column; align-items: center; text-align: center; }
-.login-icon { display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; border-radius: 28rpx; background: var(--color-primary-soft); }
-.login-title { margin-top: 24rpx; font-size: 36rpx; font-weight: 600; }
-.login-subtitle { margin-top: 10rpx; color: var(--color-text-secondary); font-size: 25rpx; }
-.primary-button, .confirm-button { height: 84rpx; border-radius: var(--radius-pill); color: #fff; background: var(--color-primary); font-size: 29rpx; font-weight: 600; line-height: 84rpx; }
-.primary-button { width: 320rpx; margin-top: 32rpx; }
-.conversation { margin-top: 34rpx; }
-.message-row { display: flex; align-items: flex-start; margin-bottom: 24rpx; animation: message-enter var(--transition-standard) both; }
+.ledger-picker { display: flex; align-items: center; gap: 8rpx; padding: 10rpx 14rpx; border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-primary-soft); font-size: 22rpx; }
+.login-panel { display: flex; margin-top: 28rpx; padding: 44rpx 32rpx; flex-direction: column; align-items: center; text-align: center; }
+.login-icon { display: flex; align-items: center; justify-content: center; width: 84rpx; height: 84rpx; border-radius: 26rpx; background: var(--color-primary-soft); }
+.login-title { margin-top: 22rpx; font-size: 34rpx; font-weight: 600; }
+.login-subtitle { margin-top: 10rpx; color: var(--color-text-secondary); font-size: 24rpx; }
+.primary-button, .confirm-button { width: 100%; height: var(--button-height-lg); border: 0; border-radius: var(--radius-pill); color: #fff; background: var(--color-primary); box-shadow: 0 16rpx 32rpx rgba(74, 144, 226, .18); font-size: var(--button-font-lg); font-weight: 600; line-height: var(--button-height-lg); }
+.primary-button { width: 320rpx; margin-top: 28rpx; }
+.conversation { margin-top: 28rpx; }
+.message-row { display: flex; align-items: flex-start; margin-bottom: 20rpx; animation: message-enter var(--transition-standard) both; }
 .message-row.user { justify-content: flex-end; }
-.message-avatar { width: 64rpx; height: 64rpx; flex: none; margin-right: 14rpx; border-radius: 20rpx; }
-.message-bubble { max-width: 520rpx; padding: 20rpx 24rpx; box-sizing: border-box; font-size: 29rpx; line-height: 1.55; }
-.assistant-bubble { border-radius: 8rpx 28rpx 28rpx 28rpx; color: var(--color-text); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.user-bubble { border-radius: 28rpx 8rpx 28rpx 28rpx; color: #fff; background: var(--color-primary); }
+.message-avatar { width: 60rpx; height: 60rpx; flex: none; margin-right: 12rpx; border-radius: 18rpx; }
+.message-bubble { max-width: 540rpx; padding: 18rpx 22rpx; box-sizing: border-box; font-size: 28rpx; line-height: 1.55; }
+.assistant-bubble { border: 1rpx solid #eef3fa; border-radius: 8rpx 26rpx 26rpx 26rpx; color: var(--color-text); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.user-bubble { border-radius: 26rpx 8rpx 26rpx 26rpx; color: #fff; background: var(--color-primary); box-shadow: 0 10rpx 22rpx rgba(74, 144, 226, .20); }
 .bubble-label { display: block; margin-bottom: 8rpx; color: var(--color-warning); font-size: 23rpx; font-weight: 600; }
 .typing-bubble { min-width: 112rpx; }
 .typing-dots { display: flex; align-items: center; justify-content: center; gap: 9rpx; height: 28rpx; }
@@ -536,38 +570,47 @@ onUnmounted(() => {
 .typing-dots text:nth-child(2) { animation-delay: 80ms; }
 .typing-dots text:nth-child(3) { animation-delay: 160ms; }
 .result-row { align-items: flex-start; }
-.result-section { width: calc(100% - 78rpx); min-width: 0; padding: 30rpx; box-sizing: border-box; }
+.result-section { width: calc(100% - 72rpx); min-width: 0; padding: 28rpx; box-sizing: border-box; border: 1rpx solid #eef3fa; box-shadow: var(--shadow-card); }
+.batch-card { padding-bottom: 26rpx; }
+.batch-item { margin-top: 18rpx; padding-top: 18rpx; border-top: 1rpx solid var(--color-border-muted); }
+.batch-item:first-of-type { margin-top: 8rpx; padding-top: 0; border-top: 0; }
+.batch-item-head { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; }
+.batch-index { color: var(--color-text-secondary); font-size: 23rpx; font-weight: 600; }
+.batch-amount { font-size: 30rpx; font-weight: 700; }
+.batch-type { width: 100%; margin: 14rpx 0 4rpx; }
+.batch-note { margin-top: 18rpx; padding: 16rpx 18rpx; border-radius: 16rpx; background: var(--color-surface-muted); color: var(--color-text-secondary); font-size: 22rpx; line-height: 1.6; }
+.batch-card .field-row:last-child { border-bottom: 0; }
 .section-heading, .share-heading { display: flex; align-items: center; justify-content: space-between; }
 .section-heading > view:first-child, .share-heading > view:first-child { display: flex; min-width: 0; flex-direction: column; }
-.section-title { font-size: 34rpx; font-weight: 600; }
-.section-subtitle, .share-subtitle { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 23rpx; }
+.section-title { font-size: 32rpx; font-weight: 600; }
+.section-subtitle, .share-subtitle { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 22rpx; }
 .ready-tag { display: flex; align-items: center; gap: 5rpx; padding: 8rpx 13rpx; border-radius: var(--radius-pill); color: var(--color-success); background: #eaf8ee; font-size: 21rpx; }
-.type-segment { display: grid; grid-template-columns: 1fr 1fr; gap: 8rpx; margin: 28rpx 0 8rpx; padding: 6rpx; border-radius: 24rpx; background: var(--color-surface-muted); }
-.segment-button { height: 68rpx; margin: 0; border-radius: 20rpx; color: var(--color-text-secondary); background: transparent; font-size: 27rpx; line-height: 68rpx; }
+.type-segment { display: grid; grid-template-columns: 1fr 1fr; gap: 8rpx; margin: 24rpx 0 8rpx; padding: 6rpx; border-radius: 22rpx; background: var(--color-surface-muted); }
+.segment-button { height: var(--button-height-md); margin: 0; border: 0; border-radius: 20rpx; color: var(--color-text-secondary); background: transparent; font-size: var(--button-font-md); font-weight: 600; line-height: var(--button-height-md); }
 .expense-option.active { color: var(--color-danger); background: #fff0ef; }
 .income-option.active { color: #248c41; background: #eaf8ee; }
-.field-row { display: flex; align-items: center; min-height: 96rpx; border-bottom: 1rpx solid var(--color-border-muted); }
-.field-label { width: 112rpx; flex: none; color: var(--color-text-secondary); font-size: 26rpx; }
-.field-input { min-width: 0; flex: 1; color: var(--color-text); font-size: 27rpx; text-align: right; }
+.field-row { display: flex; align-items: center; min-height: 92rpx; border-bottom: 1rpx solid var(--color-border-muted); }
+.field-label { width: 108rpx; flex: none; color: var(--color-text-secondary); font-size: 25rpx; }
+.field-input { min-width: 0; flex: 1; color: var(--color-text); font-size: 26rpx; text-align: right; }
 .amount-input-wrap { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-end; }
-.currency { color: var(--color-text); font-size: 34rpx; font-weight: 700; }
-.amount-input { width: 230rpx; color: var(--color-text); font-size: 44rpx; font-weight: 700; text-align: right; }
-.share-section { margin-top: 28rpx; padding-top: 24rpx; border-top: 1rpx solid var(--color-border); }
+.currency { color: var(--color-text); font-size: 32rpx; font-weight: 700; }
+.amount-input { width: 230rpx; color: var(--color-text); font-size: 42rpx; font-weight: 700; text-align: right; }
+.share-section { margin-top: 24rpx; padding-top: 22rpx; border-top: 1rpx solid var(--color-border); }
 .share-title { font-weight: 600; }
-.member-list { display: flex; margin-top: 16rpx; flex-direction: column; }
-.member-row { display: flex; align-items: center; gap: 14rpx; min-height: 80rpx; }
-.member-role { margin-left: auto; color: var(--color-text-secondary); font-size: 23rpx; }
-.confirm-button { margin-top: 30rpx; }
-.composer-shell { position: fixed; right: 24rpx; bottom: calc(110rpx + constant(safe-area-inset-bottom)); bottom: calc(110rpx + env(safe-area-inset-bottom)); left: 24rpx; z-index: 80; padding: 14rpx; border: 1rpx solid var(--color-border-muted); border-radius: 36rpx; background: var(--color-surface); box-shadow: 0 -4rpx 24rpx rgba(0, 0, 0, .05); }
+.member-list { display: flex; margin-top: 14rpx; flex-direction: column; }
+.member-row { display: flex; align-items: center; gap: 14rpx; min-height: 76rpx; }
+.member-role { margin-left: auto; color: var(--color-text-secondary); font-size: 22rpx; }
+.confirm-button { margin-top: 24rpx; }
+.composer-shell { position: fixed; right: 24rpx; bottom: calc(110rpx + constant(safe-area-inset-bottom)); bottom: calc(110rpx + env(safe-area-inset-bottom)); left: 24rpx; z-index: 80; padding: 12rpx; border: 1rpx solid var(--color-border-muted); border-radius: 28rpx; background: var(--color-surface); box-shadow: var(--shadow-card); }
 .composer { display: flex; align-items: flex-end; gap: 12rpx; }
-.voice-button, .analyze-button { display: flex; width: 72rpx; height: 72rpx; flex: none; margin: 0; padding: 0; align-items: center; justify-content: center; border-radius: 50%; line-height: 72rpx; }
+.voice-button, .analyze-button { display: flex; width: var(--button-height-md); height: var(--button-height-md); flex: none; margin: 0; padding: 0; align-items: center; justify-content: center; border-radius: 50%; line-height: var(--button-height-md); }
 .voice-button { color: var(--color-primary); background: var(--color-primary-soft); }
 .voice-button.recording { color: #fff; background: var(--color-danger); }
 .analyze-button { color: #fff; background: var(--color-primary); }
 /* 未输入文字时按钮保持可见，仅降低透明度示意待激活 */
 .analyze-button.is-idle { opacity: 0.5; }
-.speech-input { min-width: 0; min-height: 72rpx; max-height: 180rpx; flex: 1; padding: 15rpx 8rpx; box-sizing: border-box; color: var(--color-text); font-size: 29rpx; line-height: 42rpx; }
-.voice-status { display: flex; align-items: center; gap: 10rpx; min-height: 40rpx; padding: 0 10rpx 10rpx; color: var(--color-text-secondary); font-size: 22rpx; }
+.speech-input { min-width: 0; min-height: var(--button-height-md); max-height: 170rpx; flex: 1; padding: 18rpx 8rpx; box-sizing: border-box; color: var(--color-text); font-size: 28rpx; line-height: 40rpx; }
+.voice-status { display: flex; align-items: center; gap: 10rpx; min-height: 38rpx; padding: 0 10rpx 8rpx; color: var(--color-text-secondary); font-size: 21rpx; }
 .voice-status.active { color: var(--color-danger); }
 .recording-dot { width: 12rpx; height: 12rpx; flex: none; border-radius: 50%; background: var(--color-danger); }
 .input-count { margin-left: auto; color: var(--color-text-secondary); font-family: var(--font-mono); font-size: 20rpx; }

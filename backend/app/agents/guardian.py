@@ -5,15 +5,25 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import AgentBase
-from app.agents.state import TransactionState
+from app.agents.state import TransactionState, parsed_items_from_state
 from app.agents.tools import (
     GUARDIAN_SYSTEM_PROMPT,
     GuardianOpinion,
     get_guardian_opinion_tool,
 )
 from app.config import get_settings
-from app.core.redis import budget_limit_key, get_budget_spent, get_redis
-from app.services.budget_service import category_spending, get_budget
+from app.core.redis import (
+    budget_limit_key,
+    budget_total_limit_key,
+    budget_total_spent_key,
+    get_budget_spent,
+    get_redis,
+)
+from app.services.budget_service import (
+    category_spending,
+    get_budget,
+    risk_level_for_ratio,
+)
 
 
 settings = get_settings()
@@ -28,88 +38,177 @@ async def _calculate_budget_risk(
     state: TransactionState,
     db: AsyncSession | None = None,
 ) -> TransactionState:
-    parsed = state.get("parsed") or {}
+    parsed_items = parsed_items_from_state(state)
 
-    if parsed.get("type") != "expense":
-        state["risk_level"] = "safe"
-        state["budget_check"] = None
-        return state
+    checks: list[dict[str, Any]] = []
+    redis = await get_redis() if db is None else None
+    # 同一批多笔可能落在同一分类；预算必须把前面几笔也算进去。
+    budget_cache: dict[tuple[int, int], Any] = {}
+    spending_cache: dict[tuple[int, int], dict[str, float]] = {}
+    batch_spent: dict[tuple[int, int, str], float] = {}
+    batch_total_spent: dict[tuple[int, int], float] = {}
+    redis_spent_cache: dict[tuple[int, int, str], float] = {}
+    redis_limit_cache: dict[tuple[int, int, str], float] = {}
+    redis_total_spent_cache: dict[tuple[int, int], float] = {}
+    redis_total_limit_cache: dict[tuple[int, int], float] = {}
+    try:
+        for index, parsed in enumerate(parsed_items):
+            if parsed.get("type") != "expense":
+                continue
 
-    amount = parsed.get("amount")
-    category = parsed.get("category")
-    if amount is None or not category:
-        state["risk_level"] = "safe"
-        state["budget_check"] = None
-        return state
+            amount = parsed.get("amount")
+            category = parsed.get("category")
+            if amount is None or not category:
+                continue
 
-    bill_date = date.fromisoformat(parsed.get("bill_date") or date.today().isoformat())
-    if db is not None:
-        budget = await get_budget(
-            db,
-            state["user_id"],
-            state["ledger_id"],
-            bill_date.year,
-            bill_date.month,
-        )
-        raw_limit = budget.category_budgets.get(category) if budget is not None else None
-        spending = await category_spending(
-            db,
-            user_id=state["user_id"],
-            ledger_id=state["ledger_id"],
-            year=bill_date.year,
-            month=bill_date.month,
-        )
-        spent = spending.get(category, 0.0)
-    else:
-        redis = await get_redis()
-        try:
-            spent = await get_budget_spent(
-                redis,
-                state["user_id"],
-                state["ledger_id"],
-                bill_date.year,
-                bill_date.month,
-                category,
+            bill_date = date.fromisoformat(
+                parsed.get("bill_date") or date.today().isoformat()
             )
-            raw_limit = await redis.get(
-                budget_limit_key(
-                    state["user_id"],
-                    state["ledger_id"],
-                    bill_date.year,
-                    bill_date.month,
-                    category,
+            month_key = (bill_date.year, bill_date.month)
+            spent_key = (bill_date.year, bill_date.month, category)
+            if db is not None:
+                if month_key not in budget_cache:
+                    budget_cache[month_key] = await get_budget(
+                        db,
+                        state["user_id"],
+                        state["ledger_id"],
+                        bill_date.year,
+                        bill_date.month,
+                    )
+                    spending_cache[month_key] = await category_spending(
+                        db,
+                        user_id=state["user_id"],
+                        ledger_id=state["ledger_id"],
+                        year=bill_date.year,
+                        month=bill_date.month,
+                    )
+                budget = budget_cache[month_key]
+                raw_limit = (
+                    budget.category_budgets.get(category)
+                    if budget is not None
+                    else None
                 )
-            )
-        finally:
+                base_spent = spending_cache[month_key].get(category, 0.0)
+                total_limit = (
+                    float(budget.total_budget)
+                    if budget is not None
+                    and getattr(budget, "total_budget", None) is not None
+                    else 0.0
+                )
+                total_base_spent = sum(spending_cache[month_key].values())
+            else:
+                if spent_key not in redis_spent_cache:
+                    redis_spent_cache[spent_key] = await get_budget_spent(
+                        redis,
+                        state["user_id"],
+                        state["ledger_id"],
+                        bill_date.year,
+                        bill_date.month,
+                        category,
+                    )
+                if spent_key not in redis_limit_cache:
+                    raw_value = await redis.get(
+                        budget_limit_key(
+                            state["user_id"],
+                            state["ledger_id"],
+                            bill_date.year,
+                            bill_date.month,
+                            category,
+                        )
+                    )
+                    redis_limit_cache[spent_key] = (
+                        float(raw_value) if raw_value is not None else 0.0
+                    )
+                base_spent = redis_spent_cache[spent_key]
+                raw_limit = redis_limit_cache[spent_key]
+
+                if month_key not in redis_total_limit_cache:
+                    total_limit_raw = await redis.get(
+                        budget_total_limit_key(
+                            state["user_id"],
+                            state["ledger_id"],
+                            bill_date.year,
+                            bill_date.month,
+                        )
+                    )
+                    total_spent_raw = await redis.get(
+                        budget_total_spent_key(
+                            state["user_id"],
+                            state["ledger_id"],
+                            bill_date.year,
+                            bill_date.month,
+                        )
+                    )
+                    redis_total_limit_cache[month_key] = (
+                        float(total_limit_raw) if total_limit_raw is not None else 0.0
+                    )
+                    redis_total_spent_cache[month_key] = (
+                        float(total_spent_raw) if total_spent_raw is not None else 0.0
+                    )
+                total_limit = redis_total_limit_cache[month_key]
+                total_base_spent = redis_total_spent_cache[month_key]
+
+            limit = float(raw_limit) if raw_limit is not None else 0.0
+            if limit > 0:
+                spent = base_spent + batch_spent.get(spent_key, 0.0)
+                projected_spent = spent + float(amount)
+                ratio = projected_spent / limit
+                checks.append(
+                    {
+                        "item_index": index,
+                        "category": category,
+                        "kind": "category",
+                        "amount": round(float(amount), 2),
+                        "bill_date": bill_date.isoformat(),
+                        "spent": round(spent, 2),
+                        "projected_spent": round(projected_spent, 2),
+                        "budget": round(limit, 2),
+                        "remaining": round(limit - projected_spent, 2),
+                        "percentage": round(ratio * 100, 1),
+                        "risk_level": risk_level_for_ratio(ratio),
+                    }
+                )
+                batch_spent[spent_key] = (
+                    batch_spent.get(spent_key, 0.0) + float(amount)
+                )
+
+            if total_limit > 0:
+                total_spent = total_base_spent + batch_total_spent.get(month_key, 0.0)
+                total_projected = total_spent + float(amount)
+                total_ratio = total_projected / total_limit
+                checks.append(
+                    {
+                        "item_index": index,
+                        "category": "总预算",
+                        "kind": "total",
+                        "amount": round(float(amount), 2),
+                        "bill_date": bill_date.isoformat(),
+                        "spent": round(total_spent, 2),
+                        "projected_spent": round(total_projected, 2),
+                        "budget": round(total_limit, 2),
+                        "remaining": round(total_limit - total_projected, 2),
+                        "percentage": round(total_ratio * 100, 1),
+                        "risk_level": risk_level_for_ratio(total_ratio),
+                    }
+                )
+                batch_total_spent[month_key] = (
+                    batch_total_spent.get(month_key, 0.0) + float(amount)
+                )
+    finally:
+        if redis is not None:
             await redis.aclose()
 
-    limit = float(raw_limit) if raw_limit is not None else 0.0
-    if limit <= 0:
+    state["budget_checks"] = checks
+    if checks:
+        strictest = max(
+            checks,
+            key=lambda check: RISK_PRIORITY.get(check["risk_level"], 0),
+        )
+        state["risk_level"] = strictest["risk_level"]
+        state["budget_check"] = strictest
+    else:
         state["risk_level"] = "safe"
         state["budget_check"] = None
-        return state
-
-    projected_spent = spent + float(amount)
-    ratio = projected_spent / limit
-    remaining = limit - projected_spent
-
-    if ratio >= settings.BUDGET_BLOCKED_RATIO:
-        risk_level = "blocked"
-    elif ratio >= settings.BUDGET_WARNING_RATIO:
-        risk_level = "warning"
-    else:
-        risk_level = "safe"
-
-    state["risk_level"] = risk_level
-    state["budget_check"] = {
-        "category": category,
-        "spent": round(spent, 2),
-        "projected_spent": round(projected_spent, 2),
-        "budget": round(limit, 2),
-        "remaining": round(remaining, 2),
-        "percentage": round(ratio * 100, 1),
-        "risk_level": risk_level,
-    }
     return state
 
 
@@ -130,7 +229,7 @@ class GuardianAgent(AgentBase[GuardianOpinion]):
             return GuardianOpinion(
                 recommended_risk_level="blocked",
                 confidence=1,
-                assessment=f"该分类预计达到预算的 {percentage}%" if percentage is not None else "该分类预计超出预算",
+                assessment=f"该预算预计达到 {percentage}%" if percentage is not None else "该预算预计超出上限",
                 suggestion="建议确认必要性；如仍需记录，可在确认页选择继续。",
                 needs_advisor=True,
             )
@@ -138,7 +237,7 @@ class GuardianAgent(AgentBase[GuardianOpinion]):
             return GuardianOpinion(
                 recommended_risk_level="warning",
                 confidence=1,
-                assessment=f"该分类预计达到预算的 {percentage}%" if percentage is not None else "该分类预算接近上限",
+                assessment=f"该预算预计达到 {percentage}%" if percentage is not None else "该预算接近上限",
                 suggestion="建议留意本月后续同类支出。",
                 needs_advisor=True,
             )
@@ -159,6 +258,24 @@ class GuardianAgent(AgentBase[GuardianOpinion]):
             state["risk_level"] = "safe"
             state["budget_check"] = None
             self.mark_degraded(state, "预算缓存暂时不可用，确认保存时将使用数据库重新校验")
+            return state
+
+        parsed_items = list(state.get("parsed_items") or [])
+        if len(parsed_items) > 1:
+            # 多笔账单的规则风险已经逐笔算完；单笔模型意见无法代表整批，
+            # 这里直接采用最严格的规则结果，避免 AI 调低风险。
+            rule_risk = state.get("risk_level", "safe")
+            state["rule_risk_level"] = rule_risk
+            state["ai_risk_level"] = rule_risk
+            self.record(
+                state,
+                role="analysis",
+                content=f"已逐笔校验 {len(parsed_items)} 笔账单的预算",
+                metadata={
+                    "count": len(parsed_items),
+                    "rule_risk_level": rule_risk,
+                },
+            )
             return state
 
         parsed = state.get("parsed") or {}

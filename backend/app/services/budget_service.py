@@ -6,13 +6,27 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.redis import budget_limit_key, budget_spent_key
+from app.core.redis import (
+    budget_limit_key,
+    budget_spent_key,
+    budget_total_limit_key,
+    budget_total_spent_key,
+)
 from app.models import Bill, BillType, Budget
 from app.schemas.budget import BudgetSet, BudgetStatus
 
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def risk_level_for_ratio(ratio: float) -> str:
+    """预算比例到风险等级的唯一映射，guardian 和状态接口共用。"""
+    if ratio >= settings.BUDGET_BLOCKED_RATIO:
+        return "blocked"
+    if ratio >= settings.BUDGET_WARNING_RATIO:
+        return "warning"
+    return "safe"
 
 
 def _month_bounds(year: int, month: int) -> tuple[date, date]:
@@ -121,6 +135,20 @@ async def set_budget(
             await redis.set(spent_key, spending.get(category, 0.0))
             await redis.expireat(limit_key, expiry)
             await redis.expireat(spent_key, expiry)
+
+        total_limit_key = budget_total_limit_key(
+            user_id, payload.ledger_id, payload.year, payload.month
+        )
+        total_spent_key = budget_total_spent_key(
+            user_id, payload.ledger_id, payload.year, payload.month
+        )
+        if payload.total_budget is None:
+            await redis.delete(total_limit_key, total_spent_key)
+        else:
+            await redis.set(total_limit_key, payload.total_budget)
+            await redis.set(total_spent_key, sum(spending.values()))
+            await redis.expireat(total_limit_key, expiry)
+            await redis.expireat(total_spent_key, expiry)
     except Exception:
         logger.warning("预算缓存同步失败，数据库预算仍已保存", exc_info=True)
     return budget
@@ -165,16 +193,38 @@ async def get_budget_statuses(
     )
     statuses: list[BudgetStatus] = []
     expiry = _redis_expiry(year, month)
+    total_spent = sum(spending.values())
+    if budget.total_budget is not None and float(budget.total_budget) > 0:
+        total_limit = float(budget.total_budget)
+        total_ratio = total_spent / total_limit
+        statuses.append(
+            BudgetStatus(
+                category="总预算",
+                kind="total",
+                spent=round(total_spent, 2),
+                budget=round(total_limit, 2),
+                remaining=round(total_limit - total_spent, 2),
+                percentage=round(total_ratio * 100, 1),
+                risk_level=risk_level_for_ratio(total_ratio),
+            )
+        )
+        try:
+            total_limit_key = budget_total_limit_key(user_id, ledger_id, year, month)
+            total_spent_key = budget_total_spent_key(user_id, ledger_id, year, month)
+            await redis.set(total_limit_key, total_limit)
+            # spent 由账单增量维护；状态刷新只做“缺失初始化”，
+            # 不能用 DB 快照覆盖并发期间已经累加的增量。
+            await redis.set(total_spent_key, total_spent, nx=True)
+            await redis.expireat(total_limit_key, expiry)
+            await redis.expireat(total_spent_key, expiry)
+        except Exception:
+            logger.warning("总预算缓存刷新失败，状态仍由数据库计算", exc_info=True)
+
     for category, raw_limit in budget.category_budgets.items():
         limit = float(raw_limit)
         spent = spending.get(category, 0.0)
         ratio = spent / limit if limit > 0 else 0.0
-        if limit > 0 and ratio >= settings.BUDGET_BLOCKED_RATIO:
-            risk_level = "blocked"
-        elif limit > 0 and ratio >= settings.BUDGET_WARNING_RATIO:
-            risk_level = "warning"
-        else:
-            risk_level = "safe"
+        risk_level = risk_level_for_ratio(ratio) if limit > 0 else "safe"
 
         limit_key = budget_limit_key(user_id, ledger_id, year, month, category)
         spent_key = budget_spent_key(user_id, ledger_id, year, month, category)

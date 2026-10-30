@@ -1,7 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { devLogin, getMe, wxLogin } from "@/api/auth";
-import { clearToken, getStoredToken, saveToken } from "@/api/client";
+import { ApiError, clearToken, getStoredToken, saveToken } from "@/api/client";
 import { useAccountStore } from "@/stores/account";
 import { useBillStore } from "@/stores/bill";
 import { useBudgetStore } from "@/stores/budget";
@@ -24,6 +24,7 @@ export const useUserStore = defineStore("user", () => {
   const token = ref(getStoredToken());
   const user = ref<User | null>(null);
   const loading = ref(false);
+  const ensuringUser = ref(false);
   const isLoggedIn = computed(() => Boolean(token.value));
 
   async function login() {
@@ -62,9 +63,29 @@ export const useUserStore = defineStore("user", () => {
     if (!token.value) return null;
     try {
       return await fetchUser();
-    } catch {
-      logout();
+    } catch (error) {
+      // 只有真正的 401 才清登录态；断网/超时/5xx 保留 token，下次进入可重试。
+      if (error instanceof ApiError && error.statusCode === 401) {
+        logout();
+      }
       return null;
+    }
+  }
+
+  async function ensureUser() {
+    if (!token.value) return null;
+    if (user.value) return user.value;
+    if (ensuringUser.value) return null;
+    ensuringUser.value = true;
+    try {
+      return await fetchUser();
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 401) {
+        logout();
+      }
+      return null;
+    } finally {
+      ensuringUser.value = false;
     }
   }
 
@@ -80,5 +101,15 @@ export const useUserStore = defineStore("user", () => {
     clearToken();
   }
 
-  return { token, user, loading, isLoggedIn, login, fetchUser, restore, logout };
+  return {
+    token,
+    user,
+    loading,
+    isLoggedIn,
+    login,
+    fetchUser,
+    restore,
+    ensureUser,
+    logout,
+  };
 });

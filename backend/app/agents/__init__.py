@@ -11,7 +11,12 @@ from app.agents.oracle import oracle_node
 from app.agents.orchestrator import OrchestratorAgent, orchestrator_node
 from app.agents.social import minimize_debts, social_node
 from app.agents.state import RiskLevel, TransactionState, new_transaction_state
-from app.agents.tools import PARSER_SYSTEM_PROMPT, ParsedBill, get_extract_tool
+from app.agents.tools import (
+    PARSER_SYSTEM_PROMPT,
+    ParsedBill,
+    ParsedBillBatch,
+    get_extract_tool,
+)
 
 
 __all__ = [
@@ -23,6 +28,7 @@ __all__ = [
     "END_NODE",
     "PARSER_SYSTEM_PROMPT",
     "ParsedBill",
+    "ParsedBillBatch",
     "RiskLevel",
     "TransactionState",
     "build_graph",

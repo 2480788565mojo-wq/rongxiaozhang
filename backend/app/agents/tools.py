@@ -57,6 +57,16 @@ class ParsedBill(BaseModel):
         return date.fromisoformat(value.strip()).isoformat()
 
 
+class ParsedBillBatch(BaseModel):
+    """一次输入里可能包含多笔独立收支。"""
+
+    items: list[ParsedBill] = Field(
+        min_length=1,
+        max_length=10,
+        description="按用户表达顺序排列的账单，每笔独立，不要把多笔合并成一笔",
+    )
+
+
 class AgentRouteDecision(BaseModel):
     intent: Literal["transaction", "advice", "unknown"] = "transaction"
     route_mode: Literal["quick", "standard", "deep"] = "standard"
@@ -95,9 +105,9 @@ def get_extract_tool() -> dict[str, Any]:
     return {
         "type": "function",
         "function": {
-            "name": "extract_transaction",
-            "description": "从用户自然语言中提取结构化记账信息",
-            "parameters": ParsedBill.model_json_schema(),
+            "name": "extract_transactions",
+            "description": "从用户自然语言中提取一笔或多笔结构化记账信息",
+            "parameters": ParsedBillBatch.model_json_schema(),
         },
     }
 
@@ -143,7 +153,7 @@ def get_advisor_recommendation_tool() -> dict[str, Any]:
 
 
 PARSER_SYSTEM_PROMPT = """你是荣小账智能记账助手，只负责提取记账信息。
-请调用 extract_transaction 工具返回结构化结果，不要编造用户没有表达的信息。
+请调用 extract_transactions 工具返回结构化结果，不要编造用户没有表达的信息。
 
 规则：
 1. 识别口语金额，例如“六十八块五”是 68.5 元。
@@ -151,7 +161,14 @@ PARSER_SYSTEM_PROMPT = """你是荣小账智能记账助手，只负责提取记
 3. 收入使用收入分类，例如工资收入、副业收入、其他收入。
 4. 根据请求中给出的今天日期推断“昨天”“上周五”等相对日期。
 5. 无法可靠判断的字段必须返回 null，由系统向用户追问。
-6. 不提供投资、借贷或信用评分建议。"""
+6. 不提供投资、借贷或信用评分建议。
+7. 用户一句话里明确包含多笔独立收支时，必须拆成多个 items，每笔一个金额、一个分类。
+   例如“5块钱的包子，10块钱的面”必须返回两笔支出，不能合并成一笔 15 元。
+8. 多笔之间用逗号、分号、句号或“还有/另外/然后”等连接时，不要自行相加或去重。
+9. 如果用户是在回答上一轮的追问（例如只补充一个金额），只返回那一笔，不要虚构其他笔。
+10. items 最多 10 笔；超过时按用户表达顺序保留前 10 笔。
+11. 用户说“取消/删掉/不算刚才那笔”时，不要把这笔当成新增账单；只提取明确要新记的笔。
+    系统暂不支持通过对话删除已入账账单。"""
 
 
 ORCHESTRATOR_SYSTEM_PROMPT = """你是荣小账多智能体团队的调度者。

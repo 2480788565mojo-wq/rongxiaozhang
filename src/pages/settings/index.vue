@@ -5,24 +5,32 @@
       <view><text class="name">{{ userStore.user?.nickname || "荣小账用户" }}</text><text>{{ ledgerStore.current?.name || "未选择账本" }}</text></view>
     </view>
     <view class="menu">
-      <view @click="go('/pages/ledgers/index')"><text>账本管理</text><text>›</text></view>
-      <view @click="go('/pages/accounts/index')"><text>账户管理</text><text>›</text></view>
-      <view @click="go('/pages/categories/index')"><text>分类管理</text><text>›</text></view>
+      <view hover-class="pressable" @click="go('/pages/ledgers/index')"><text>账本管理</text><text>›</text></view>
+      <view hover-class="pressable" @click="go('/pages/accounts/index')"><text>账户管理</text><text>›</text></view>
+      <view hover-class="pressable" @click="go('/pages/categories/index')"><text>分类管理</text><text>›</text></view>
       <view v-if="appStore.aiEnabled" @click="go('/pages/insights/index')"><text>消费洞察</text><text>›</text></view>
     </view>
     <view class="menu">
-      <view @click="exportCsv"><text>导出 CSV</text><text>›</text></view>
-      <view @click="exportJson"><text>导出 JSON 备份</text><text>›</text></view>
+      <view hover-class="pressable" @click="go('/subpackages/import/index')"><text>导入 Excel 账单</text><text>›</text></view>
+      <view hover-class="pressable" @click="exportCsv"><text>导出 CSV</text><text>›</text></view>
+      <view hover-class="pressable" @click="exportJson"><text>导出 JSON 备份</text><text>›</text></view>
+      <view hover-class="pressable" @click="exportServer"><text>导出账号数据（服务器）</text><text>›</text></view>
+    </view>
+    <view class="menu">
+      <view class="danger-row" hover-class="pressable" @click="deleteAccountPermanently"><text>永久删除账号</text><text>›</text></view>
     </view>
     <button class="logout" @click="logout">退出登录</button>
     <text class="version">荣小账 v2.0.0 · 云端同步</text>
-  </view>
+    <BudgetAlert />
+</view>
 </template>
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
+import BudgetAlert from "@/components/BudgetAlert.vue";
 import { getBills } from "@/api/bills";
 import { getAccounts } from "@/api/accounts";
+import { deleteAccount, exportAccount } from "@/api/auth";
 import { getCategories } from "@/api/categories";
 import { useLedgerStore } from "@/stores/ledger";
 import { useUserStore } from "@/stores/user";
@@ -33,7 +41,10 @@ import { escapeCsvCell } from "@/utils/csv";
 const userStore = useUserStore();
 const ledgerStore = useLedgerStore();
 const appStore = useAppStore();
-onShow(async () => { if (!ledgerStore.currentId && userStore.isLoggedIn) await ledgerStore.fetchLedgers(); });
+onShow(async () => {
+  await userStore.ensureUser();
+  if (!ledgerStore.currentId && userStore.isLoggedIn) await ledgerStore.fetchLedgers();
+});
 function go(url: string) { uni.navigateTo({ url }); }
 async function allBills(): Promise<Bill[]> {
   const result: Bill[] = [];
@@ -70,20 +81,60 @@ function downloadText(content: string, filename: string, mime: string) {
   wxApi.getFileSystemManager().writeFile({ filePath: path, data: content, encoding: "utf8", success: () => uni.openDocument({ filePath: path, showMenu: true }) });
   // #endif
 }
+async function exportServer() {
+  try {
+    const data = await exportAccount();
+    downloadText(
+      JSON.stringify(data, null, 2),
+      `荣小账账号数据_${today()}.json`,
+      "application/json",
+    );
+  } catch (error) {
+    uni.showToast({
+      title: error instanceof Error ? error.message : "导出失败，请重试",
+      icon: "none",
+    });
+  }
+}
+
+function deleteAccountPermanently() {
+  uni.showModal({
+    title: "永久删除账号",
+    content: "账号、账单、预算、分类和账户数据都会被删除，无法恢复。确定继续吗？",
+    confirmText: "永久删除",
+    confirmColor: "#ff3b30",
+    success: async (result) => {
+      if (!result.confirm) return;
+      try {
+        await deleteAccount();
+        userStore.logout();
+        uni.showToast({ title: "账号已删除", icon: "none" });
+        setTimeout(() => uni.reLaunch({ url: "/pages/index/index" }), 500);
+      } catch (error) {
+        uni.showToast({
+          title: error instanceof Error ? error.message : "删除失败，请重试",
+          icon: "none",
+        });
+      }
+    },
+  });
+}
+
 function logout() { userStore.logout(); uni.showToast({ title: "已退出", icon: "none" }); }
 </script>
 
 <style scoped>
 .page { min-height: 100vh; padding: 28rpx 28rpx 70rpx; box-sizing: border-box; }
-.profile { display: flex; align-items: center; gap: 22rpx; padding: 32rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.profile image { width: 94rpx; height: 94rpx; border-radius: 28rpx; }
+.profile { display: flex; align-items: center; gap: 20rpx; padding: 30rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.profile image { width: 90rpx; height: 90rpx; border-radius: 26rpx; }
 .profile > view { display: flex; flex-direction: column; }
 .name { font-size: 32rpx; font-weight: 600; }
-.profile view text:last-child { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 23rpx; }
-.menu { margin-top: 18rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.menu view { display: flex; align-items: center; justify-content: space-between; min-height: 92rpx; padding: 0 30rpx; border-bottom: 1rpx solid var(--color-border-muted); }
+.profile view text:last-child { margin-top: 6rpx; color: var(--color-text-secondary); font-size: 22rpx; }
+.menu { margin-top: 16rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.menu view { display: flex; align-items: center; justify-content: space-between; min-height: 90rpx; padding: 0 28rpx; border-bottom: 1rpx solid var(--color-border-muted); font-size: 27rpx; }
 .menu view:last-child { border-bottom: 0; }
-.menu view text:last-child { color: var(--color-text-secondary); font-size: 38rpx; }
-.logout { margin-top: 24rpx; color: var(--color-danger); background: #fff0ef; border-radius: var(--radius-pill); }
-.version { display: block; color: var(--color-text-secondary); font-size: 22rpx; text-align: center; }
+.menu view text:last-child { color: var(--color-text-secondary); font-size: 36rpx; }
+.menu .danger-row { color: var(--color-danger); }
+.logout { width: 100%; height: var(--button-height-lg); margin-top: 22rpx; border: 0; color: var(--color-danger); background: #fff0ef; border-radius: var(--radius-pill); font-size: var(--button-font-lg); font-weight: 600; line-height: var(--button-height-lg); }
+.version { display: block; margin-top: 8rpx; color: var(--color-text-secondary); font-size: 22rpx; text-align: center; }
 </style>

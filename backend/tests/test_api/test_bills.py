@@ -66,6 +66,38 @@ class FakeGraph:
         }
 
 
+class FakeMultiGraph:
+    def get_state(self, _config):
+        return SimpleNamespace(values={})
+
+    async def astream(self, _state, _config):
+        items = [
+            {
+                "type": "expense",
+                "amount": 5,
+                "category": "餐饮美食",
+                "subcategory": "早餐",
+                "bill_date": "2026-07-15",
+            },
+            {
+                "type": "expense",
+                "amount": 10,
+                "category": "餐饮美食",
+                "subcategory": "午餐",
+                "bill_date": "2026-07-15",
+            },
+        ]
+        yield {
+            "parser": {
+                "parsed": items[0],
+                "parsed_items": items,
+                "missing_fields": [],
+                "clarification_question": None,
+                "error": None,
+            }
+        }
+
+
 class FakeAdviceGraph:
     def get_state(self, _config):
         return SimpleNamespace(values={})
@@ -102,6 +134,7 @@ async def test_transcribe_waits_for_confirmation(monkeypatch):
     )
     monkeypatch.setattr(bills_api, "get_compiled_graph", lambda: FakeGraph())
     monkeypatch.setattr(bills_api, "require_rate_limits", AsyncMock())
+    monkeypatch.setattr(bills_api, "list_categories", AsyncMock(return_value=[]))
 
     response = await bills_api.transcribe_bill(
         TranscribeRequest(text="午饭68块", ledger_id=1),
@@ -120,6 +153,35 @@ async def test_transcribe_waits_for_confirmation(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_transcribe_streams_all_items_for_multi_bill_input(monkeypatch):
+    monkeypatch.setattr(
+        bills_api,
+        "require_ledger_access",
+        AsyncMock(return_value=(SimpleNamespace(type=LedgerType.PERSONAL), None)),
+    )
+    monkeypatch.setattr(bills_api, "get_compiled_graph", lambda: FakeMultiGraph())
+    monkeypatch.setattr(bills_api, "require_rate_limits", AsyncMock())
+    monkeypatch.setattr(bills_api, "list_categories", AsyncMock(return_value=[]))
+
+    response = await bills_api.transcribe_bill(
+        TranscribeRequest(text="5块钱的包子，10块钱的面", ledger_id=1),
+        SimpleNamespace(id=1),
+        AsyncMock(),
+        AsyncMock(),
+    )
+    chunks = []
+    async for chunk in response.body_iterator:
+        chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+    body = "".join(chunks)
+
+    assert "event: parsed" in body
+    assert '"items"' in body
+    assert '"amount": 5' in body
+    assert '"amount": 10' in body
+    assert "event: awaiting_confirmation" in body
+
+
+@pytest.mark.asyncio
 async def test_transcribe_returns_advisor_message_for_advice_intent(monkeypatch):
     monkeypatch.setattr(
         bills_api,
@@ -128,6 +190,7 @@ async def test_transcribe_returns_advisor_message_for_advice_intent(monkeypatch)
     )
     monkeypatch.setattr(bills_api, "get_compiled_graph", lambda: FakeAdviceGraph())
     monkeypatch.setattr(bills_api, "require_rate_limits", AsyncMock())
+    monkeypatch.setattr(bills_api, "list_categories", AsyncMock(return_value=[]))
     monkeypatch.setattr(bills_api, "clear_transaction_session", AsyncMock())
     monkeypatch.setattr(
         bills_api,

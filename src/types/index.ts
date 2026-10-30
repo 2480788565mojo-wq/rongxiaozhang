@@ -101,6 +101,7 @@ export interface ParsedBill {
 
 export interface BudgetStatus {
   category: string;
+  kind?: "category" | "total";
   spent: number;
   budget: number;
   remaining: number;

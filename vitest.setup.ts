@@ -32,6 +32,7 @@ const uni = {
   navigateBack: vi.fn(),
   setNavigationBarTitle: vi.fn(),
   showModal: vi.fn(),
+  setClipboardData: vi.fn(),
   authorize: vi.fn(),
   openSetting: vi.fn(),
   request: vi.fn(),
@@ -61,7 +62,11 @@ vi.stubGlobal('getCurrentPages', vi.fn(() => [{ options: {} }]))
 
 // 模拟 @dcloudio/uni-app 模块（避免 vue 实例版本冲突）
 vi.mock('@dcloudio/uni-app', () => ({
+  onLoad: vi.fn((cb: (query: Record<string, string>) => void) => cb((getCurrentPages()[getCurrentPages().length - 1] as any)?.options || {})),
   onShow: vi.fn((cb: () => void) => cb()),
   onLaunch: vi.fn(),
+  onReady: vi.fn((cb: () => void) => cb()),
+  onUnload: vi.fn(),
+  onReachBottom: vi.fn(),
   onHide: vi.fn(),
 }))

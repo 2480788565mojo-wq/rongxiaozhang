@@ -1,17 +1,20 @@
 <template>
-  <view class="chart"><EChartHost ref="chartRef" /></view>
+  <view class="chart"><EChartHost ref="chartRef" :height="400" /><button v-if="renderError" class="chart-retry" @click="render">图表加载失败，点击重试</button></view>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { onShow, onReady } from "@dcloudio/uni-app";
 import echarts from "./echarts-lite";
-import type { ECharts, EChartsOption } from "echarts";
+import type { EChartsType as ECharts } from "echarts/core";
+import type { EChartsOption } from "echarts";
 import type { BudgetStatus } from "@/types";
 import EChartHost from "./EChartHost.vue";
 
 const props = withDefaults(defineProps<{ statuses: BudgetStatus[] }>(), { statuses: () => [] });
 const chartRef = ref<any>(null);
 let chart: ECharts | null = null;
+const renderError = ref(false);
 const usage = computed(() => Math.max(0, ...props.statuses.map((item) => item.percentage), 0));
 
 function option(): EChartsOption {
@@ -49,7 +52,7 @@ function option(): EChartsOption {
           fontWeight: 700,
           fontFamily: "sans-serif",
         },
-        data: [{ value: Number(value.toFixed(1)), name: "最高分类预算使用率" }],
+        data: [{ value: Number(value.toFixed(1)), name: "最高预算使用率" }],
       },
     ],
   };
@@ -58,17 +61,21 @@ function option(): EChartsOption {
 async function render() {
   await nextTick();
   if (!chartRef.value) return;
-  if (chart) return void chart.setOption(option(), true);
-  const instance = await chartRef.value.init(echarts) as echarts.ECharts | null;
-  if (!instance) return;
-  chart = instance;
-  chart.setOption(option());
+  try {
+    if (!chart || chart.isDisposed()) chart = await chartRef.value.init(echarts) as ECharts | null;
+    if (!chart) { renderError.value = true; return; }
+    chart.setOption(option(), true);
+    renderError.value = false;
+  } catch { renderError.value = true; }
 }
 
 onMounted(render);
+onReady(render);
+onShow(() => { void render(); chartRef.value?.resize(); });
 watch(() => props.statuses, render, { deep: true });
 </script>
 
 <style scoped>
-.chart { width: 100%; height: 400rpx; }
+.chart { position: relative; width: 100%; height: 400rpx; }
+.chart-retry { position: absolute; left: 10%; right: 10%; top: 35%; font-size: 26rpx; color: var(--color-text-secondary); background: var(--color-surface-muted); }
 </style>

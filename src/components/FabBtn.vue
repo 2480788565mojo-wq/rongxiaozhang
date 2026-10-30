@@ -174,12 +174,12 @@ onUnmounted(removeMouseListeners);
 	height: 96rpx;
 	border-radius: 50%;
 	border: 0;
-	background: #4a90e2;
+	background: linear-gradient(145deg, #5aa1f0, #3d7fd1);
 	color: #fff;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 8rpx 24rpx rgba(74, 144, 226, .24);
+	box-shadow: 0 16rpx 32rpx rgba(74, 144, 226, .28);
 	z-index: 999;
 	margin: 0;
 	padding: 0;
@@ -188,10 +188,10 @@ onUnmounted(removeMouseListeners);
 	user-select: none;
 	will-change: left, top, transform;
 }
-.fab-btn:active { transform: translateX(-50%) scale(.97); box-shadow: 0 4rpx 16rpx rgba(74, 144, 226, .3); }
+.fab-btn:active { transform: translateX(-50%) scale(.97); box-shadow: 0 8rpx 20rpx rgba(74, 144, 226, .3); }
 .fab-btn.is-positioned { transform: none; }
 .fab-btn.is-positioned:active { transform: scale(.97); }
-.fab-btn.is-dragging { transform: scale(1.04); box-shadow: 0 10rpx 28rpx rgba(74, 144, 226, .3); }
+.fab-btn.is-dragging { transform: scale(1.04); box-shadow: 0 20rpx 36rpx rgba(74, 144, 226, .32); }
 .fab-btn:focus-visible { outline: 3rpx solid #1d1d1f; outline-offset: 6rpx; }
 .fab-icon {
 	font-size: 56rpx;

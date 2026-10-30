@@ -28,9 +28,16 @@ page {
   --space-6: 48rpx;
   --radius-sm: 20rpx;
   --radius-md: 32rpx;
-  --radius-lg: 40rpx;
+  --radius-lg: 36rpx;
   --radius-pill: 999rpx;
-  --shadow-sm: 0 8rpx 48rpx rgba(0, 0, 0, 0.04);
+  --button-height-lg: 96rpx;
+  --button-height-md: 80rpx;
+  --button-height-sm: 64rpx;
+  --button-font-lg: 32rpx;
+  --button-font-md: 28rpx;
+  --button-font-sm: 24rpx;
+  --shadow-sm: 0 12rpx 36rpx rgba(29, 29, 31, 0.05);
+  --shadow-card: 0 18rpx 48rpx rgba(29, 29, 31, 0.06);
   --shadow-pressed: 0 4rpx 18rpx rgba(29, 29, 31, 0.08);
   --transition-fast: 200ms ease;
   --transition-standard: 280ms ease;

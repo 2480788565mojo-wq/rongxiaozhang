@@ -1,0 +1,4 @@
+interface:
+  display_name: "微信小程序设计规范"
+  short_description: "按微信小程序官方设计规范生成、审查和修复页面设计，包含完整颜色体系、暗黑模式、WeUI组件细节、横屏/iPad适配。"
+  default_prompt: "请使用微信小程序设计规范帮我审查这个小程序页面，并输出问题、修改建议和可落地的尺寸/交互规则。所有数值用 rpx 单位，颜色给精确 hex 或 rgba 值。"

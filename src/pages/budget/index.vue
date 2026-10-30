@@ -1,6 +1,10 @@
 <template>
   <view class="page">
     <view class="month-head"><text class="title">{{ year }}年{{ month }}月预算</text><text>{{ ledgerStore.current?.name }}</text></view>
+    <view v-if="loadError" class="load-error">
+      <text>{{ loadError }}</text>
+      <button class="retry-load" @click="load">重新加载</button>
+    </view>
     <view class="gauge"><BudgetGauge :statuses="budgetStore.statuses" /></view>
     <label class="total-row"><text>总预算</text><input v-model.number="totalBudget" type="digit" placeholder="0.00" /></label>
     <view class="category-list">
@@ -10,13 +14,14 @@
       </view>
     </view>
     <button class="save" :loading="saving" @click="save">保存预算</button>
-  </view>
+</view>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import BudgetGauge from "@/components/charts/BudgetGauge.vue";
+import { CATEGORY_PRESETS } from "@/constants/categories";
 import { getBudget } from "@/api/budgets";
 import { useBudgetStore } from "@/stores/budget";
 import { useCategoryStore } from "@/stores/category";
@@ -32,7 +37,9 @@ type BudgetInput = number | string | null | undefined;
 const totalBudget = ref<BudgetInput>(null);
 const categoryBudgets = reactive<Record<string, BudgetInput>>({});
 const saving = ref(false);
-const presets = ["餐饮美食", "交通出行", "购物消费", "居住物业", "休闲娱乐", "人情社交", "医疗健康", "教育学习", "通讯"];
+const loadError = ref("");
+let loadVersion = 0;
+const presets = Object.keys(CATEGORY_PRESETS.expense);
 const budgetCategories = computed(() => Array.from(new Set([...presets, ...categoryStore.categories.filter((item) => item.type === "expense" && !item.parent_name).map((item) => item.name)])));
 const statusMap = computed(() => Object.fromEntries(budgetStore.statuses.map((item) => [item.category, item])));
 
@@ -49,19 +56,34 @@ function normalizeBudget(value: BudgetInput): number | null | undefined {
 }
 
 async function load() {
+  const version = ++loadVersion;
+  loadError.value = "";
   const period = currentPeriod();
   year.value = period.year;
   month.value = period.month;
-  if (!ledgerStore.currentId) await ledgerStore.fetchLedgers();
-  if (!ledgerStore.currentId) return;
-  await Promise.all([
-    categoryStore.fetchCategories(ledgerStore.currentId),
-    budgetStore.fetchStatuses(ledgerStore.currentId, year.value, month.value),
-  ]);
-  const data = await getBudget(ledgerStore.currentId, year.value, month.value);
-  totalBudget.value = data?.total_budget ?? null;
+  // 先清空旧月份，接口失败时不会把上个月的数据当成这个月展示。
+  totalBudget.value = null;
   Object.keys(categoryBudgets).forEach((key) => delete categoryBudgets[key]);
-  Object.assign(categoryBudgets, data?.category_budgets || {});
+  try {
+    if (!ledgerStore.currentId) await ledgerStore.fetchLedgers();
+    if (!ledgerStore.currentId) {
+      loadError.value = "请先创建或加入账本";
+      return;
+    }
+    await Promise.all([
+      categoryStore.fetchCategories(ledgerStore.currentId),
+      budgetStore.fetchStatuses(ledgerStore.currentId, year.value, month.value),
+    ]);
+    const data = await getBudget(ledgerStore.currentId, year.value, month.value);
+    if (version !== loadVersion) return;
+    totalBudget.value = data?.total_budget ?? null;
+    Object.assign(categoryBudgets, data?.category_budgets || {});
+  } catch (error) {
+    if (version !== loadVersion) return;
+    // 失败时仪表盘也不能继续显示上个月/上个账本的数据。
+    budgetStore.statuses = [];
+    loadError.value = error instanceof Error ? error.message : "预算加载失败，请重试";
+  }
 }
 onShow(() => void load());
 
@@ -100,15 +122,17 @@ async function save() {
 <style scoped>
 .page { min-height: 100vh; padding: 24rpx 28rpx 80rpx; box-sizing: border-box; }
 .month-head { display: flex; align-items: center; justify-content: space-between; }
-.title { font-size: 40rpx; font-weight: 600; }
-.month-head > text:last-child { color: var(--color-text-secondary); font-size: 24rpx; }
-.gauge { margin-top: 20rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.total-row, .category-row { display: flex; align-items: center; justify-content: space-between; min-height: 96rpx; padding: 0 24rpx; border-bottom: 1rpx solid var(--color-border-muted); background: var(--color-surface); }
-.total-row { margin-top: 18rpx; border: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
-.total-row input, .category-row input { width: 220rpx; text-align: right; }
-.category-list { margin-top: 18rpx; overflow: hidden; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.title { font-size: 38rpx; font-weight: 600; }
+.month-head > text:last-child { color: var(--color-text-secondary); font-size: 22rpx; }
+.gauge { margin-top: 18rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.total-row, .category-row { display: flex; align-items: center; justify-content: space-between; min-height: 92rpx; padding: 0 22rpx; border-bottom: 1rpx solid var(--color-border-muted); background: var(--color-surface); font-size: 26rpx; }
+.total-row { margin-top: 16rpx; border: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.total-row input, .category-row input { width: 210rpx; font-size: 26rpx; text-align: right; }
+.category-list { margin-top: 16rpx; overflow: hidden; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 .category-row:last-child { border-bottom: 0; }
 .category-row > view { display: flex; flex-direction: column; }
 .category-row view text:last-child { margin-top: 5rpx; color: var(--color-text-secondary); font-size: 22rpx; }
-.save { margin-top: 28rpx; color: #fff; background: var(--color-primary); border-radius: var(--radius-pill); }
+.load-error { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 14rpx; padding: 18rpx 22rpx; border-radius: var(--radius-lg); color: var(--color-danger); background: #fff0ef; font-size: 24rpx; }
+.retry-load { flex: none; height: var(--button-height-sm); margin: 0; padding: 0 18rpx; border: 0; border-radius: 16rpx; color: var(--color-primary); background: var(--color-surface); font-size: 22rpx; line-height: var(--button-height-sm); }
+.save { width: 100%; height: var(--button-height-lg); margin-top: 24rpx; border: 0; color: #fff; background: var(--color-primary); border-radius: var(--radius-pill); font-size: var(--button-font-lg); font-weight: 600; line-height: var(--button-height-lg); }
 </style>

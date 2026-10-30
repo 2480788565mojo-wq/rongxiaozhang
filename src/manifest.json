@@ -39,6 +39,7 @@
     /* 小程序特有相关 */
     "mp-weixin" : {
         "appid" : "wx790e9576e610670e",
+        "optimization": { "subPackages": true },
         "setting" : {
             "urlCheck" : true
         },

@@ -21,15 +21,65 @@ function responseError(response: any): Error {
   return new Error(message);
 }
 
-function decodeChunk(chunk: ArrayBuffer, decoder?: TextDecoder): string {
-  if (decoder) return decoder.decode(chunk, { stream: true });
-  const bytes = new Uint8Array(chunk);
-  const encoded = Array.from(bytes, (byte) => `%${byte.toString(16).padStart(2, "0")}`).join("");
-  try {
-    return decodeURIComponent(encoded);
-  } catch {
-    return String.fromCharCode(...bytes);
+export interface Utf8Chunk {
+  text: string;
+  rest: number[];
+}
+
+/**
+ * 小程序不一定有 TextDecoder；必须跨 chunk 保留不完整的多字节序列，
+ * 否则一个汉字的 3 个字节被拆到两个 chunk 时会变成乱码。
+ */
+export function decodeUtf8Bytes(bytes: number[]): Utf8Chunk {
+  let index = 0;
+  let text = "";
+  while (index < bytes.length) {
+    const first = bytes[index];
+    let needed = 0;
+    let codePoint = 0;
+    if (first < 0x80) {
+      text += String.fromCharCode(first);
+      index += 1;
+      continue;
+    }
+    if ((first & 0xe0) === 0xc0) {
+      needed = 1;
+      codePoint = first & 0x1f;
+    } else if ((first & 0xf0) === 0xe0) {
+      needed = 2;
+      codePoint = first & 0x0f;
+    } else if ((first & 0xf8) === 0xf0) {
+      needed = 3;
+      codePoint = first & 0x07;
+    } else {
+      // 非法起始字节：用替换符消费掉，避免死循环。
+      text += "\uFFFD";
+      index += 1;
+      continue;
+    }
+    if (index + needed >= bytes.length) break;
+    let valid = true;
+    for (let offset = 1; offset <= needed; offset += 1) {
+      const next = bytes[index + offset];
+      if ((next & 0xc0) !== 0x80) {
+        valid = false;
+        break;
+      }
+      codePoint = (codePoint << 6) | (next & 0x3f);
+    }
+    if (!valid) {
+      text += "\uFFFD";
+      index += 1;
+      continue;
+    }
+    text += String.fromCodePoint(codePoint);
+    index += needed + 1;
   }
+  return { text, rest: bytes.slice(index) };
+}
+
+function decodeChunk(chunk: ArrayBuffer, decoder: TextDecoder): string {
+  return decoder.decode(chunk, { stream: true });
 }
 
 function parseEventBlock(block: string): SSEEvent | null {
@@ -57,6 +107,7 @@ export function createSSEConnection(
   options: SSERequestOptions,
 ): SSEConnection {
   let buffer = "";
+  let pendingBytes: number[] = [];
   let closed = false;
   const decoder = typeof TextDecoder !== "undefined" ? new TextDecoder("utf-8") : undefined;
   const task = uni.request({
@@ -80,7 +131,16 @@ export function createSSEConnection(
   } as any) as any;
 
   task.onChunkReceived?.((response: { data: ArrayBuffer }) => {
-    buffer += decodeChunk(response.data, decoder);
+    if (decoder) {
+      buffer += decodeChunk(response.data, decoder);
+    } else {
+      const decoded = decodeUtf8Bytes([
+        ...pendingBytes,
+        ...Array.from(new Uint8Array(response.data)),
+      ]);
+      pendingBytes = decoded.rest;
+      buffer += decoded.text;
+    }
     const blocks = buffer.split(/\r?\n\r?\n/);
     buffer = blocks.pop() || "";
     blocks.forEach((block) => {

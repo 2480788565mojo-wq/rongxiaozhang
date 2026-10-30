@@ -1,0 +1,4 @@
+interface:
+  display_name: "Uview Vue2"
+  short_description: "uView Vue 2 component library including components, tools, and…"
+  default_prompt: "Use $uview-vue2 to help with my current task: Provides comprehensive guidance for uView Vue 2 component library including components, tools, and layouts."

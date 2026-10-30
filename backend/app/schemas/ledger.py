@@ -40,6 +40,10 @@ class LedgerMemberOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MemberRoleUpdate(BaseModel):
+    role: Literal["admin", "member"]
+
+
 class LedgerOut(BaseModel):
     id: int
     name: str
@@ -60,6 +64,15 @@ class SettlementOut(BaseModel):
     to_user_id: int
     to_user_name: str
     amount: float = Field(gt=0)
+    # 能直接对应到“该付款人欠该收款人”的账单分摊；
+    # 如果这笔转账是多人链路抵消出来的，列表为空，需要到账单详情逐笔处理。
+    share_ids: list[int] = Field(default_factory=list)
+
+
+class SettlementConfirm(BaseModel):
+    from_user_id: int = Field(gt=0)
+    to_user_id: int = Field(gt=0)
+    share_ids: list[int] = Field(min_length=1, max_length=100)
 
 
 class LedgerSettlementResponse(BaseModel):

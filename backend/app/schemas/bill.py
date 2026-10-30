@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 import math
 from typing import Literal
 
@@ -6,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 BillKind = Literal["expense", "income"]
+EXCEL_IMPORT_KEY_PATTERN = r"^excel:[a-f0-9]{32}:[0-9]{1,7}$"
 
 
 class TranscribeRequest(BaseModel):
@@ -31,6 +33,8 @@ class TranscribeResponse(BaseModel):
 
 
 class BillCreateRequest(BaseModel):
+    # 同一次 Excel 导入的每行固定编号，断网重试时不重复入账。
+    import_key: str | None = Field(default=None, pattern=EXCEL_IMPORT_KEY_PATTERN)
     ledger_id: int = Field(gt=0)
     type: BillKind
     amount: float = Field(gt=0, le=100_000_000, allow_inf_nan=False)
@@ -67,12 +71,49 @@ class ParsedBillInput(BaseModel):
         return cleaned or None
 
 
+class BillImportItem(ParsedBillInput):
+    import_key: str = Field(pattern=EXCEL_IMPORT_KEY_PATTERN)
+
+    @field_validator("amount")
+    @classmethod
+    def money_has_at_most_two_decimal_places(cls, value: float) -> float:
+        amount = Decimal(str(value))
+        if amount != amount.quantize(Decimal("0.01")):
+            raise ValueError("导入金额最多保留两位小数")
+        return value
+
+
+class BillImportRequest(BaseModel):
+    ledger_id: int = Field(gt=0)
+    items: list[BillImportItem] = Field(min_length=1, max_length=100)
+
+    @field_validator("items")
+    @classmethod
+    def import_keys_must_be_unique(cls, items: list[BillImportItem]) -> list[BillImportItem]:
+        keys = [item.import_key for item in items]
+        if len(keys) != len(set(keys)):
+            raise ValueError("同一批导入中不能有重复的账单编号")
+        return items
+
+
+class BillImportResultItem(BaseModel):
+    import_key: str
+    bill_id: int
+    created: bool
+
+
+class BillImportResponse(BaseModel):
+    items: list[BillImportResultItem]
+
+
 class BillConfirmRequest(BaseModel):
     ledger_id: int = Field(default=1, gt=0)
     session_id: str = Field(min_length=1, max_length=64)
     raw_input: str = Field(min_length=1, max_length=500)
     parsed: ParsedBillInput
     share_user_ids: list[int] = Field(default_factory=list, max_length=50)
+    # 批量逐笔确认时由客户端显式标记，避免再从 session_id 里猜冒号。
+    is_batch_item: bool = False
 
     @field_validator("raw_input", mode="before")
     @classmethod

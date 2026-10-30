@@ -9,6 +9,15 @@ const userStore = useUserStore();
 const sseStore = useSSEStore();
 const appStore = useAppStore();
 
+// 任意页面 token 失效（退出、过期、切换账号）统一回首页登录，避免各页各自弹 401。
+uni.$on("rxz:auth-expired", () => {
+  userStore.logout();
+  uni.showToast({ title: "登录已失效，请重新登录", icon: "none" });
+  setTimeout(() => {
+    uni.reLaunch({ url: "/pages/index/index" });
+  }, 350);
+});
+
 // App.vue 的模板不会在微信小程序端渲染，因此全局连接必须由应用生命周期维护。
 watch(
   () => userStore.token,

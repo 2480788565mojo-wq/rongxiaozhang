@@ -2,7 +2,7 @@
   <view class="page">
     <view class="balance-band"><text>账户总余额</text><text class="balance-value numeric">¥{{ store.totalBalance.toFixed(2) }}</text></view>
     <view class="account-list">
-      <view v-for="account in store.accounts" :key="account.id" class="account-row" @click="edit(account)">
+      <view v-for="account in store.accounts" :key="account.id" class="account-row" hover-class="pressable" @click="edit(account)">
         <view class="account-icon">{{ iconFor(account.type) }}</view>
         <view class="account-copy"><text>{{ account.name }}</text><text>{{ account.type }}</text></view>
         <text class="account-balance numeric">¥{{ account.balance.toFixed(2) }}</text>
@@ -18,7 +18,7 @@
         <button v-if="editingId" class="delete" @click="confirmDelete">删除账户</button>
       </view>
     </u-modal>
-  </view>
+</view>
 </template>
 
 <script setup lang="ts">
@@ -60,18 +60,26 @@ function confirmDelete() {
 
 <style scoped>
 .page { min-height: 100vh; padding: 28rpx; box-sizing: border-box; }
-.balance-band { display: flex; flex-direction: column; padding: 34rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.balance-band > text:first-child { color: var(--color-text-secondary); font-size: 25rpx; }
-.balance-value { margin-top: 18rpx; overflow: hidden; font-size: 56rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.account-list { margin-top: 18rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.account-row { display: flex; align-items: center; min-height: 104rpx; padding: 0 24rpx; border-bottom: 1rpx solid var(--color-border-muted); }
+.balance-band {
+  display: flex;
+  flex-direction: column;
+  padding: 32rpx;
+  border: 1rpx solid #e3eefb;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #f4f9ff 0%, #ffffff 62%);
+  box-shadow: var(--shadow-card);
+}
+.balance-band > text:first-child { color: var(--color-text-secondary); font-size: 24rpx; }
+.balance-value { margin-top: 18rpx; overflow: hidden; font-size: 54rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.account-list { margin-top: 16rpx; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.account-row { display: flex; align-items: center; min-height: 100rpx; padding: 0 22rpx; border-bottom: 1rpx solid var(--color-border-muted); }
 .account-row:last-child { border-bottom: 0; }
-.account-icon { display: flex; align-items: center; justify-content: center; width: 60rpx; height: 60rpx; border-radius: 20rpx; color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
-.account-copy { display: flex; flex: 1; flex-direction: column; margin-left: 18rpx; }
+.account-icon { display: flex; align-items: center; justify-content: center; width: 58rpx; height: 58rpx; border-radius: 20rpx; color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
+.account-copy { display: flex; flex: 1; flex-direction: column; margin-left: 16rpx; }
 .account-copy text:last-child { margin-top: 4rpx; color: var(--color-text-secondary); font-size: 22rpx; }
-.account-balance { max-width: 240rpx; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.add { margin-top: 24rpx; color: #fff; background: var(--color-primary); border-radius: var(--radius-pill); }
+.account-balance { max-width: 240rpx; overflow: hidden; font-size: 26rpx; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.add { width: 100%; height: var(--button-height-lg); margin-top: 22rpx; border: 0; color: #fff; background: var(--color-primary); border-radius: var(--radius-pill); font-size: var(--button-font-lg); font-weight: 600; line-height: var(--button-height-lg); }
 .form { width: 100%; padding: 20rpx; box-sizing: border-box; }
-.form input { height: 80rpx; margin-bottom: 14rpx; padding: 0 20rpx; border-radius: 20rpx; background: var(--color-surface-muted); }
+.form input { height: 80rpx; margin-bottom: 14rpx; padding: 0 20rpx; border-radius: 20rpx; background: var(--color-surface-muted); font-size: 26rpx; }
 .delete { margin-top: 18rpx; color: var(--color-danger); background: transparent; }
 </style>

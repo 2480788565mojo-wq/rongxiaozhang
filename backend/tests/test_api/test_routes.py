@@ -23,11 +23,15 @@ def test_all_planned_api_routes_are_registered():
     expected = {
         ("POST", "/auth/login"),
         ("GET", "/auth/me"),
+        ("DELETE", "/auth/me"),
+        ("GET", "/auth/export"),
         ("GET", "/accounts"),
         ("POST", "/accounts"),
         ("PUT", "/accounts/{account_id}"),
         ("DELETE", "/accounts/{account_id}"),
         ("POST", "/bills/transcribe"),
+        ("POST", "/bills"),
+        ("POST", "/bills/import"),
         ("POST", "/bills/confirm"),
         ("GET", "/bills"),
         ("GET", "/bills/{bill_id}"),
@@ -38,7 +42,10 @@ def test_all_planned_api_routes_are_registered():
         ("GET", "/ledgers/{ledger_id}"),
         ("POST", "/ledgers/{ledger_id}/join"),
         ("POST", "/ledgers/{ledger_id}/settle"),
+        ("POST", "/ledgers/{ledger_id}/settle/confirm"),
         ("POST", "/ledgers/{ledger_id}/invite/rotate"),
+        ("DELETE", "/ledgers/{ledger_id}/members/{member_user_id}"),
+        ("PUT", "/ledgers/{ledger_id}/members/{member_user_id}"),
         ("GET", "/budgets"),
         ("PUT", "/budgets"),
         ("GET", "/budgets/status"),
@@ -54,7 +61,8 @@ def test_all_planned_api_routes_are_registered():
         ("GET", "/insights/{insight_id}"),
         ("GET", "/sse/subscribe"),
         ("GET", "/health"),
+        ("GET", "/config"),
     }
 
     assert expected <= routes
-    assert len(routes) == 33
+    assert len(routes) == 41

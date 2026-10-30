@@ -1,9 +1,21 @@
 page {
   color: var(--color-text);
-  background: var(--color-bg);
+  background-color: #e8eff8;
+  background-image:
+    radial-gradient(ellipse at 18% 0%, rgba(74, 144, 226, .14), transparent 56%),
+    radial-gradient(circle at 18% 24%, rgba(74, 144, 226, .26) 0 2rpx, transparent 3rpx),
+    radial-gradient(circle at 72% 68%, rgba(74, 144, 226, .18) 0 1.5rpx, transparent 2.5rpx);
+  background-size: 100% 100%, 320rpx 320rpx, 420rpx 420rpx;
+  background-repeat: no-repeat, repeat, repeat;
+  animation: particle-drift 60s linear infinite;
   font-family: var(--font-sans);
   font-size: 28rpx;
   letter-spacing: 0;
+}
+
+@keyframes particle-drift {
+  0% { background-position: 0 0, 0 0, 0 0; }
+  100% { background-position: 0 0, 640rpx 640rpx, -840rpx 420rpx; }
 }
 
 :root,
@@ -55,7 +67,13 @@ button {
 }
 
 button::after { border: 0; }
-button:active { transform: scale(0.97); }
+button:active { transform: scale(0.98); opacity: 0.92; }
+
+.pressable {
+  opacity: 0.86;
+  transform: scale(0.985);
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
 input,
 textarea { caret-color: var(--color-primary); }
 
@@ -72,6 +90,35 @@ textarea { caret-color: var(--color-primary); }
   color: var(--color-text) !important;
   background: var(--color-surface) !important;
   box-shadow: var(--shadow-sm) !important;
+}
+
+.u-modal {
+  border-radius: 28rpx !important;
+  overflow: hidden;
+}
+
+.u-modal__title { font-size: 34rpx !important; }
+
+.u-modal__content__text {
+  font-size: 28rpx !important;
+  line-height: 1.65;
+}
+
+.u-modal__button-group__wrapper__text {
+  font-size: 30rpx !important;
+  font-weight: 600;
+}
+
+/* uView 的 large 按钮默认 50px，比原生按钮高出一截；统一到 A 方案的 96rpx。 */
+.u-button,
+.u-button--large {
+  height: var(--button-height-lg) !important;
+  border-radius: var(--radius-pill) !important;
+}
+
+.u-button__text {
+  font-size: var(--button-font-lg) !important;
+  font-weight: 600;
 }
 
 .u-button--primary {

@@ -1,0 +1,207 @@
+{
+  "name": "wechat-miniapp-skills",
+  "version": "2.2.0",
+  "language": "zh-CN",
+  "canonical_skill_root": "skills",
+  "positioning": "Domain-agnostic, composable engineering skills for WeChat Mini Program projects.",
+  "skills": [
+    {
+      "name": "wechat-miniapp-core",
+      "path": "skills/wechat-miniapp-core/SKILL.md",
+      "tags": [
+        "wechat",
+        "mini-program",
+        "architecture",
+        "engineering"
+      ],
+      "recommended_with": [
+        "miniapp-product-thinking",
+        "miniapp-ui-system"
+      ]
+    },
+    {
+      "name": "miniapp-product-thinking",
+      "path": "skills/miniapp-product-thinking/SKILL.md",
+      "tags": [
+        "product",
+        "requirements",
+        "ux"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core"
+      ]
+    },
+    {
+      "name": "miniapp-ui-system",
+      "path": "skills/miniapp-ui-system/SKILL.md",
+      "tags": [
+        "ui",
+        "ux",
+        "design-system"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core",
+        "miniapp-component-system",
+        "miniapp-ui-style-library"
+      ]
+    },
+    {
+      "name": "miniapp-ui-style-library",
+      "path": "skills/miniapp-ui-style-library/SKILL.md",
+      "tags": [
+        "ui",
+        "visual-style",
+        "theme",
+        "design-tokens"
+      ],
+      "recommended_with": [
+        "miniapp-ui-system",
+        "miniapp-component-system"
+      ]
+    },
+    {
+      "name": "miniapp-component-system",
+      "path": "skills/miniapp-component-system/SKILL.md",
+      "tags": [
+        "components",
+        "reuse",
+        "wxml"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core",
+        "miniapp-ui-system"
+      ]
+    },
+    {
+      "name": "miniapp-api-system",
+      "path": "skills/miniapp-api-system/SKILL.md",
+      "tags": [
+        "api",
+        "network",
+        "idempotency"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core",
+        "miniapp-auth-security"
+      ]
+    },
+    {
+      "name": "miniapp-auth-security",
+      "path": "skills/miniapp-auth-security/SKILL.md",
+      "tags": [
+        "auth",
+        "security",
+        "privacy",
+        "permission"
+      ],
+      "recommended_with": [
+        "miniapp-api-system"
+      ]
+    },
+    {
+      "name": "miniapp-platform-capabilities",
+      "path": "skills/miniapp-platform-capabilities/SKILL.md",
+      "tags": [
+        "wechat",
+        "location",
+        "camera",
+        "share",
+        "subscription"
+      ],
+      "recommended_with": [
+        "miniapp-auth-security"
+      ]
+    },
+    {
+      "name": "miniapp-state-data",
+      "path": "skills/miniapp-state-data/SKILL.md",
+      "tags": [
+        "state",
+        "setData",
+        "cache",
+        "pagination"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core"
+      ]
+    },
+    {
+      "name": "miniapp-business-workflow",
+      "path": "skills/miniapp-business-workflow/SKILL.md",
+      "tags": [
+        "workflow",
+        "state-machine",
+        "submit",
+        "idempotency"
+      ],
+      "recommended_with": [
+        "miniapp-api-system",
+        "miniapp-product-thinking"
+      ]
+    },
+    {
+      "name": "miniapp-ai-assistant",
+      "path": "skills/miniapp-ai-assistant/SKILL.md",
+      "tags": [
+        "llm",
+        "ai",
+        "tool-calling",
+        "rag"
+      ],
+      "recommended_with": [
+        "miniapp-api-system",
+        "miniapp-auth-security",
+        "miniapp-business-workflow"
+      ]
+    },
+    {
+      "name": "miniapp-performance",
+      "path": "skills/miniapp-performance/SKILL.md",
+      "tags": [
+        "performance",
+        "package",
+        "render",
+        "network"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core"
+      ]
+    },
+    {
+      "name": "miniapp-debug",
+      "path": "skills/miniapp-debug/SKILL.md",
+      "tags": [
+        "debug",
+        "bugfix",
+        "lifecycle"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core"
+      ]
+    },
+    {
+      "name": "miniapp-code-review",
+      "path": "skills/miniapp-code-review/SKILL.md",
+      "tags": [
+        "review",
+        "quality",
+        "security"
+      ],
+      "recommended_with": [
+        "wechat-miniapp-core"
+      ]
+    },
+    {
+      "name": "miniapp-testing-release",
+      "path": "skills/miniapp-testing-release/SKILL.md",
+      "tags": [
+        "testing",
+        "release",
+        "regression"
+      ],
+      "recommended_with": [
+        "miniapp-code-review"
+      ]
+    }
+  ]
+}

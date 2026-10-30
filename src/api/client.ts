@@ -1,4 +1,15 @@
 const TOKEN_KEY = "rxz_access_token";
+let authExpiredNotified = false;
+
+function notifyAuthExpired(): void {
+  clearToken();
+  if (authExpiredNotified) return;
+  authExpiredNotified = true;
+  uni.$emit("rxz:auth-expired");
+  setTimeout(() => {
+    authExpiredNotified = false;
+  }, 1500);
+}
 
 export const API_BASE_URL =
   (import.meta as any).env?.VITE_API_BASE_URL ||
@@ -61,7 +72,7 @@ export async function api<T>(
   });
 
   if (response.statusCode === 401) {
-    clearToken();
+    notifyAuthExpired();
   }
   if (response.statusCode >= 400) {
     const data = response.data as { detail?: string; message?: string } | undefined;

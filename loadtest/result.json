@@ -1,0 +1,109 @@
+{
+    "target":  "http://127.0.0.1:8000/api/v1",
+    "duration_seconds":  300,
+    "stages":  [
+                   {
+                       "requests":  36732,
+                       "success":  36732,
+                       "errors":  0,
+                       "timeouts":  0,
+                       "error_rate_percent":  0.0,
+                       "timeout_rate_percent":  0.0,
+                       "tps":  122.36,
+                       "avg_ms":  407.9,
+                       "p50_ms":  330.1,
+                       "p95_ms":  832.2,
+                       "p99_ms":  1290.3,
+                       "max_ms":  4031.0,
+                       "status_counts":  {
+                                             "200":  36732
+                                         },
+                       "scenario_counts":  {
+                                               "auth_me":  4165,
+                                               "bill_detail":  4082,
+                                               "stats_category":  4047,
+                                               "stats_overview":  6026,
+                                               "ledgers":  6108,
+                                               "bills_list":  8186,
+                                               "budget_status":  4118
+                                           },
+                       "concurrency":  50
+                   },
+                   {
+                       "requests":  38408,
+                       "success":  38408,
+                       "errors":  0,
+                       "timeouts":  0,
+                       "error_rate_percent":  0.0,
+                       "timeout_rate_percent":  0.0,
+                       "tps":  127.81,
+                       "avg_ms":  781.1,
+                       "p50_ms":  532.3,
+                       "p95_ms":  2225.1,
+                       "p99_ms":  3537.1,
+                       "max_ms":  8042.0,
+                       "status_counts":  {
+                                             "200":  38408
+                                         },
+                       "scenario_counts":  {
+                                               "auth_me":  4315,
+                                               "stats_category":  4260,
+                                               "bill_detail":  4207,
+                                               "ledgers":  6440,
+                                               "stats_overview":  6276,
+                                               "bills_list":  8616,
+                                               "budget_status":  4294
+                                           },
+                       "concurrency":  100
+                   },
+                   {
+                       "requests":  30294,
+                       "success":  30005,
+                       "errors":  289,
+                       "timeouts":  282,
+                       "error_rate_percent":  0.954,
+                       "timeout_rate_percent":  0.931,
+                       "tps":  100.54,
+                       "avg_ms":  1903.7,
+                       "p50_ms":  791.3,
+                       "p95_ms":  6718.2,
+                       "p99_ms":  9448.7,
+                       "max_ms":  15967.7,
+                       "status_counts":  {
+                                             "200":  30012
+                                         },
+                       "scenario_counts":  {
+                                               "auth_me":  3317,
+                                               "stats_category":  3323,
+                                               "bill_detail":  3378,
+                                               "stats_overview":  4871,
+                                               "ledgers":  5088,
+                                               "bills_list":  6712,
+                                               "budget_status":  3323
+                                           },
+                       "concurrency":  200
+                   },
+                   {
+                       "requests":  68313,
+                       "success":  0,
+                       "errors":  68313,
+                       "timeouts":  673,
+                       "error_rate_percent":  100,
+                       "timeout_rate_percent":  0.985,
+                       "tps":  227.71,
+                       "avg_ms":  0,
+                       "p50_ms":  0,
+                       "p95_ms":  0,
+                       "p99_ms":  0,
+                       "max_ms":  0,
+                       "status_counts":  {
+
+                                         },
+                       "scenario_counts":  {
+
+                                           },
+                       "concurrency":  500
+                   }
+               ],
+    "generated_at":  "2026-10-30T06:30:05.535190+00:00"
+}

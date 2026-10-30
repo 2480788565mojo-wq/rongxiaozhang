@@ -3,6 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 import EChartHost from "./EChartHost.vue";
 
 describe("EChartHost 图表生命周期", () => {
+  it("H5 不将 uni-app 画布外壳作为真正的画布传入", async () => {
+    const wrapper = mount(EChartHost);
+    const host = wrapper.find('.echart-host').element as HTMLElement;
+    const lookup = vi.spyOn(document, 'getElementById').mockReturnValue(host);
+    const init = vi.fn((host: HTMLElement) => {
+      if (['canvas', 'uni-canvas'].includes(host.tagName.toLowerCase())) throw new Error('需要普通图表容器');
+      return { dispose: vi.fn(), isDisposed: () => false };
+    });
+    vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ width: 300, height: 200 } as DOMRect);
+    try {
+      await expect((wrapper.vm as any).init({ init })).resolves.toBeTruthy();
+      expect(init).toHaveBeenCalledOnce();
+    } finally { wrapper.unmount(); lookup.mockRestore(); }
+  });
   it("并发初始化只创建一个实例，尺寸变化时重绘，卸载时释放", async () => {
     const canvas = document.createElement("canvas");
     vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({ width: 300, height: 200 } as DOMRect);

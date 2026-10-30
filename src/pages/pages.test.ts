@@ -100,7 +100,14 @@ describe('云端账单列表', () => {
     ledgerStore.switchLedger(1)
     const wrapper = await mountPage('./bills/index.vue', pinia)
     expect(wrapper.text()).toContain('2026-07-15')
+    expect(wrapper.find('.bill').exists()).toBe(false)
+    expect(wrapper.find('.date-head').text()).toContain('1 笔')
+    await wrapper.find('.date-head').trigger('click')
+    expect(wrapper.find('.bill').exists()).toBe(true)
     expect(wrapper.text()).toContain('餐饮美食')
+    await wrapper.find('.date-head').trigger('click')
+    expect(wrapper.find('.bill').exists()).toBe(false)
+    expect(billApi.getBills).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -116,6 +123,26 @@ describe('云端首页', () => {
     const wrapper = await mountPage('./index/index.vue', pinia)
     expect(wrapper.text()).toContain('¥100.00')
     expect(wrapper.text()).toContain('¥5000.00')
+    expect(wrapper.find('.recent-content').exists()).toBe(false)
+    await wrapper.find('.recent-toggle').trigger('click')
+    expect(wrapper.find('.recent-content').exists()).toBe(true)
+    expect(wrapper.find('.recent-content').text()).toContain('本月还没有账单')
+    await wrapper.find('.recent-content .text-button').trigger('click')
+    expect(uni.switchTab).toHaveBeenCalledWith({ url: '/pages/bills/index' })
+    await wrapper.find('.recent-toggle').trigger('click')
+    expect(wrapper.find('.recent-content').exists()).toBe(false)
+  })
+
+  it('首页提供明显的 Excel 导入入口', async () => {
+    const { useUserStore } = await import('@/stores/user')
+    const { useLedgerStore } = await import('@/stores/ledger')
+    const pinia = activatePinia()
+    useUserStore().token = 'token'
+    useLedgerStore().ledgers = [ledger]
+    useLedgerStore().switchLedger(1)
+    const wrapper = await mountPage('./index/index.vue', pinia)
+    expect(wrapper.find('.excel-import').exists()).toBe(true)
+    expect(wrapper.text()).toContain('导入 Excel 账单')
   })
 
   it('无预算时显示云端空状态', async () => {
@@ -168,7 +195,7 @@ describe('云端首页', () => {
 })
 
 describe('语音记账页面', () => {
-  it('微信端点击语音按钮时提示当前版本暂不支持', async () => {
+  it('没有识别能力时提示并保留已输入内容', async () => {
     const { useUserStore } = await import('@/stores/user')
     const { useLedgerStore } = await import('@/stores/ledger')
     const { useAppStore } = await import('@/stores/app')
@@ -182,7 +209,7 @@ describe('语音记账页面', () => {
     await wrapper.find('.speech-input').setValue('原文')
     await wrapper.find('.voice-button').trigger('click')
     await flushPromises()
-    expect(uni.showToast).toHaveBeenCalledWith({ title: '当前版本暂不支持语音输入', icon: 'none' })
+    expect(uni.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining('不支持语音识别') }))
     expect(uni.authorize).not.toHaveBeenCalled()
     expect((wrapper.find('.speech-input').element as HTMLTextAreaElement).value).toBe('原文')
     expect(wrapper.find('.voice-status').exists()).toBe(false)
@@ -241,14 +268,35 @@ describe('云端管理页面', () => {
     expect(uni.showToast).toHaveBeenCalledWith({ title: '同名大类已存在', icon: 'none' })
   })
 
+  it('一个统计接口失败时仍显示其余数据并允许重试', async () => {
+    vi.mocked(statsApi.getOverview).mockResolvedValue({ ledger_id: 1, year: 2026, month: 9, expense: 123, income: 456, balance: 333, budget_used_percentage: null })
+    vi.mocked(statsApi.getCategoryStats).mockRejectedValue(new Error('分类暂不可用'))
+    const { useLedgerStore } = await import('@/stores/ledger')
+    const pinia = activatePinia(); useLedgerStore().currentId = 1
+    const wrapper = await mountPage('./stats/index.vue', pinia)
+    expect(wrapper.text()).toContain('123.00')
+    expect(wrapper.find('.retry-stats').exists()).toBe(true)
+    vi.mocked(statsApi.getCategoryStats).mockResolvedValue({ ledger_id:1,year:2026,month:9,total:0,items:[] })
+    await wrapper.find('.retry-stats').trigger('click'); await flushPromises()
+    expect(wrapper.find('.retry-stats').exists()).toBe(false); wrapper.unmount()
+  })
+
   it('统计页显示后端摘要', async () => {
     vi.mocked(statsApi.getOverview).mockResolvedValue({ ledger_id: 1, year: 2026, month: 7, expense: 200, income: 0, balance: -200, budget_used_percentage: null })
+    vi.mocked(statsApi.getCategoryStats).mockResolvedValue({ ledger_id: 1, year: 2026, month: 7, total: 200, items: [{ category: '餐饮', amount: 200, percentage: 100 }] })
     const { useLedgerStore } = await import('@/stores/ledger')
     const pinia = activatePinia()
     useLedgerStore().ledgers = [ledger]
     useLedgerStore().switchLedger(1)
     const wrapper = await mountPage('./stats/index.vue', pinia)
     expect(wrapper.text()).toContain('¥200.00')
+    expect(wrapper.find('.rank-row').exists()).toBe(false)
+    await wrapper.find('.ranking-toggle').trigger('click')
+    expect(wrapper.find('.rank-row').text()).toContain('餐饮')
+    await wrapper.find('.ranking-toggle').trigger('click')
+    expect(wrapper.find('.rank-row').exists()).toBe(false)
+    expect(wrapper.find('.pie-stub').exists()).toBe(true)
+    expect(statsApi.getCategoryStats).toHaveBeenCalledTimes(1)
   })
 
   it('跨月后统计页重新请求新月份数据', async () => {

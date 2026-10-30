@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import TrendLine from "./TrendLine.vue";
@@ -33,11 +35,11 @@ function latestOption() {
 beforeEach(() => {
   chartMocks.init.mockReset();
   chartMocks.setOption.mockReset();
-  chartMocks.init.mockResolvedValue({ setOption: chartMocks.setOption });
+  chartMocks.init.mockResolvedValue({ setOption: chartMocks.setOption, isDisposed: () => false });
 });
 
 describe("Apple 浅色图表主题", () => {
-  it("趋势图使用浅色提示框并正确映射收支数据", async () => {
+  it("趋势图使用浅色提示框并以折线面积图正确映射收支数据", async () => {
     mount(TrendLine, {
       props: {
         data: [
@@ -54,8 +56,57 @@ describe("Apple 浅色图表主题", () => {
       backgroundColor: "#ffffff",
       borderColor: "#e5e5ea",
     });
-    expect(option.series[0]).toMatchObject({ name: "支出", data: [120, 80] });
-    expect(option.series[1]).toMatchObject({ name: "收入", data: [500, 600] });
+    // Spec 要求月度趋势为折线图：支出和收入两条系列都必须是 line。
+    expect(option.series).toHaveLength(2);
+    expect(option.series.map((series: any) => series.type)).toEqual(["line", "line"]);
+    expect(option.series[0]).toMatchObject({ name: "支出", type: "line", data: [120, 80] });
+    expect(option.series[1]).toMatchObject({ name: "收入", type: "line", data: [500, 600] });
+    expect(option.series.every((series: any) => !series.stack && !series.smooth)).toBe(true);
+    // 折线图使用线性坐标轴指示器，且数据点不向两侧留空。
+    expect(option.tooltip.axisPointer).toMatchObject({ type: "line" });
+    expect(option.xAxis.boundaryGap).toBe(false);
+    // 两条系列都带折线样式与面积渐变，而不是柱子。
+    for (const series of option.series) {
+      expect(series.lineStyle).toMatchObject({ width: 3 });
+      expect(series.lineStyle.color).toBeTruthy();
+      expect(series.areaStyle).toBeTruthy();
+      expect(series.areaStyle.color).toBeTruthy();
+      expect(series.barWidth).toBeUndefined();
+    }
+    expect(option.xAxis.data).toEqual(["2026-06", "2026-07"]);
+    expect(option.tooltip.valueFormatter(123.4)).toBe("¥123.40");
+  });
+
+  it("图表依赖与文档不再引用 uCharts", () => {
+    const root = process.cwd();
+    const scannedFiles = [
+      "package.json",
+      "package-lock.json",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "README.md",
+      "docs/superpowers/specs/2026-07-14-rongxiaozhang-rebuild-design.md",
+      "src/components/charts/TrendLine.vue",
+      "src/components/charts/echarts-lite.ts",
+    ];
+    for (const file of scannedFiles) {
+      expect(readFileSync(resolve(root, file), "utf8"), file).not.toMatch(/@qiun\/ucharts|ucharts/i);
+    }
+  });
+
+  it("十二个月均显示短月份标签，金额轴缩写后仍保留完整金额提示", async () => {
+    mount(TrendLine, { props: { data: Array.from({ length: 12 }, (_, index) => ({
+      period: `2026-${String(index + 1).padStart(2, "0")}`, expense: index * 100, income: index * 10000,
+    })) } });
+    await flushPromises();
+
+    const option = latestOption();
+    expect(option.xAxis.axisLabel.interval).toBe(0);
+    expect(option.xAxis.axisLabel.rotate).toBeGreaterThan(0);
+    expect(option.xAxis.axisLabel.formatter("2026-09")).toBe("9月");
+    expect(option.yAxis.axisLabel.formatter(120000)).toBe("¥12万");
+    expect(option.yAxis.axisLabel.formatter(1500)).toBe("¥1.5千");
+    expect(option.tooltip.valueFormatter(123456.78)).toBe("¥123456.78");
   });
 
   it("趋势图不包含霓虹发光参数", async () => {

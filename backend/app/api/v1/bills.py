@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.agents.graph import (
     clear_transaction_session,
@@ -15,16 +16,19 @@ from app.agents.graph import (
 )
 from app.agents.guardian import guardian_budget_node, stricter_risk
 from app.agents.orchestrator import looks_like_advice_request
-from app.agents.state import new_transaction_state
+from app.agents.state import new_transaction_state, parsed_items_from_state
 from app.api.deps import CurrentUser, DBSession, RedisClient, require_ledger_access
 from app.api.rate_limit import require_rate_limits
 from app.api.v1.sse import publish_user_event
 from app.models import LedgerRole, LedgerType
 from app.config import get_settings
+from app.core.redis import ledger_write_lock
 from app.core.rate_limit import RateLimitRule
 from app.schemas.bill import (
     BillConfirmRequest,
     BillCreateRequest,
+    BillImportRequest,
+    BillImportResponse,
     BillListParams,
     BillListResponse,
     BillOut,
@@ -41,7 +45,9 @@ from app.services.bill_service import (
     lock_user_for_billing,
     update_bill,
 )
+from app.services.bill_import_service import prepare_bill_import, update_import_budget_cache
 from app.services.ledger_service import get_ledger_member_ids
+from app.services.category_service import list_categories
 from app.services.stats_service import get_category_stats, get_overview
 
 router = APIRouter()
@@ -96,6 +102,19 @@ async def transcribe_bill(
         ledger_id=request.ledger_id,
         session_id=session_id,
     )
+    try:
+        categories = await list_categories(db, user.id, request.ledger_id)
+    except SQLAlchemyError:
+        logger.warning("自定义分类加载失败，AI 解析将使用默认分类", exc_info=True)
+        categories = []
+    state["available_categories"] = [
+        {
+            "type": category.type.value,
+            "category": category.parent_name or category.name,
+            "subcategory": category.name if category.parent_name else "",
+        }
+        for category in categories
+    ]
     if looks_like_advice_request(request.text):
         try:
             today = date.today()
@@ -106,7 +125,7 @@ async def transcribe_bill(
                 year=today.year,
                 month=today.month,
             )
-            categories, _ = await get_category_stats(
+            category_rows, _ = await get_category_stats(
                 db,
                 ledger_id=request.ledger_id,
                 year=today.year,
@@ -119,7 +138,7 @@ async def transcribe_bill(
                     "expense": overview.expense,
                     "balance": overview.balance,
                     "budget_used_percentage": overview.budget_used_percentage,
-                    "top_categories": [item.model_dump() for item in categories[:5]],
+                    "top_categories": [item.model_dump() for item in category_rows[:5]],
                 }
             }
         except Exception:
@@ -138,6 +157,8 @@ async def transcribe_bill(
     async def event_stream() -> AsyncIterator[str]:
         parsed_ready = False
         transaction_advice: dict[str, Any] | None = None
+        latest_items: list[dict[str, Any]] = []
+        latest_checks: list[dict[str, Any]] = []
         async for event in graph.astream(state, config):
             for node_name, node_state in event.items():
                 if node_name == "advisor":
@@ -152,14 +173,20 @@ async def transcribe_bill(
                         await clear_transaction_session(user.id, request.ledger_id, session_id)
                         return
                     transaction_advice = advice_payload
+                if node_name == "guardian":
+                    latest_checks = list(node_state.get("budget_checks") or [])
+                    continue
                 if node_name != "parser":
                     continue
                 if node_state.get("parsed"):
+                    items = parsed_items_from_state(node_state)
+                    latest_items = items
                     parsed_ready = not node_state.get("missing_fields")
                     yield _sse_message(
                         "parsed",
                         {
                             "parsed": node_state["parsed"],
+                            "items": items,
                             "session_id": session_id,
                         },
                     )
@@ -186,6 +213,8 @@ async def transcribe_bill(
                 "awaiting_confirmation",
                 {
                     "session_id": session_id,
+                    "items": latest_items,
+                    "budget_checks": latest_checks,
                     "advice": transaction_advice,
                 },
             )
@@ -210,28 +239,59 @@ async def create_bill(
 ) -> BillOut:
     await require_ledger_access(db, request.ledger_id, user.id)
     await lock_user_for_billing(db, user.id)
-    parsed = {
-        "type": request.type,
-        "amount": request.amount,
-        "category": request.category,
-        "subcategory": request.subcategory,
-        "account": request.account,
-        "note": request.note,
-        "bill_date": request.bill_date.isoformat(),
-    }
-    bill = await create_bill_from_parsed(
-        db,
-        redis,
-        user.id,
-        request.ledger_id,
-        parsed,
-        raw_input="",
-    )
-    await db.commit()
-    loaded = await get_bill_with_access(db, bill.id, user.id)
-    if loaded is None:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "账单保存后读取失败")
-    return BillOut.model_validate(loaded[0])
+    async with ledger_write_lock(redis, request.ledger_id):
+        if request.import_key:
+            existing = await get_bill_by_confirmation_session(db, user.id, request.ledger_id, request.import_key)
+            if existing is not None:
+                return BillOut.model_validate(existing)
+        parsed = {
+            "type": request.type,
+            "amount": request.amount,
+            "category": request.category,
+            "subcategory": request.subcategory,
+            "account": request.account,
+            "note": request.note,
+            "bill_date": request.bill_date.isoformat(),
+        }
+        bill = await create_bill_from_parsed(
+            db,
+            redis,
+            user.id,
+            request.ledger_id,
+            parsed,
+            raw_input="",
+            confirmation_session_id=request.import_key,
+        )
+        bill.ai_parsed = False
+        await db.commit()
+        loaded = await get_bill_with_access(db, bill.id, user.id)
+        if loaded is None:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "账单保存后读取失败")
+        return BillOut.model_validate(loaded[0])
+
+
+@router.post("/import", response_model=BillImportResponse)
+async def import_bills(
+    request: BillImportRequest,
+    user: CurrentUser,
+    db: DBSession,
+    redis: RedisClient,
+) -> BillImportResponse:
+    await require_ledger_access(db, request.ledger_id, user.id)
+    await lock_user_for_billing(db, user.id)
+    async with ledger_write_lock(redis, request.ledger_id):
+        try:
+            items, budget_deltas = await prepare_bill_import(
+                db, user_id=user.id, ledger_id=request.ledger_id, items=request.items
+            )
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        # A failed batch never changes the cache or partially changes account balances.
+        await db.commit()
+        await update_import_budget_cache(
+            redis, user_id=user.id, ledger_id=request.ledger_id, deltas=budget_deltas
+        )
+        return BillImportResponse(items=items)
 
 
 @router.post("/confirm", response_model=BillOut)
@@ -243,15 +303,6 @@ async def confirm_bill(
 ) -> BillOut | JSONResponse:
     ledger, _ = await require_ledger_access(db, request.ledger_id, user.id)
     await lock_user_for_billing(db, user.id)
-    existing = await get_bill_by_confirmation_session(
-        db,
-        user.id,
-        request.ledger_id,
-        request.session_id,
-    )
-    if existing is not None:
-        await clear_transaction_session(user.id, request.ledger_id, request.session_id)
-        return BillOut.model_validate(existing)
     parsed = request.parsed.model_dump(mode="json")
     if request.share_user_ids:
         if ledger.type != LedgerType.SHARED:
@@ -264,6 +315,40 @@ async def confirm_bill(
                 status.HTTP_400_BAD_REQUEST,
                 "收入记录不能使用 AA 分摊",
             )
+    # AA 成员校验必须在账本锁内做：否则校验通过后成员可能被并发移除。
+    # 一把锁覆盖幂等检查、AI/预算和创建；重试不需要额外加锁，
+    # 也不会在拿到已创建账单前重复调用 AI。
+    # 锁内包含 AI/guardian，重复确认可能等待更久；给它更长的有限重试预算，
+    # 以便最终走到幂等检查并返回已创建账单，而不是过早 409。
+    async with ledger_write_lock(
+        redis, request.ledger_id, retry_attempts=30
+    ):
+        return await _confirm_bill_locked(
+            request, user, db, redis, ledger, parsed
+        )
+
+
+async def _confirm_bill_locked(
+    request: BillConfirmRequest,
+    user: CurrentUser,
+    db: DBSession,
+    redis: RedisClient,
+    ledger,
+    parsed: dict,
+) -> BillOut | JSONResponse:
+    existing = await get_bill_by_confirmation_session(
+        db,
+        user.id,
+        request.ledger_id,
+        request.session_id,
+    )
+    if existing is not None:
+        await clear_transaction_session(
+            user.id, request.ledger_id, request.session_id
+        )
+        return BillOut.model_validate(existing)
+
+    if request.share_user_ids:
         member_ids = await get_ledger_member_ids(db, request.ledger_id)
         invalid_ids = set(request.share_user_ids) - member_ids
         if invalid_ids:
@@ -271,6 +356,10 @@ async def confirm_bill(
                 status.HTTP_400_BAD_REQUEST,
                 "AA 参与人中包含非账本成员",
             )
+
+    # 批量逐笔确认时，不能继承整批的 AI 风险，否则一笔超支会连坐其他笔。
+    # 批量标记由客户端显式传入，不用 session_id 的冒号来猜。
+    is_batch_item = request.is_batch_item
     state = new_transaction_state(
         raw_input=request.raw_input,
         user_id=user.id,
@@ -289,7 +378,10 @@ async def confirm_bill(
         checkpoint_state = dict(checkpoint.values) if checkpoint.values else {}
         if checkpoint_state.get("route_mode") in {"quick", "standard", "deep"}:
             state["route_mode"] = checkpoint_state["route_mode"]
-        if checkpoint_state.get("ai_risk_level") in {"safe", "warning", "blocked"}:
+        if (
+            not is_batch_item
+            and checkpoint_state.get("ai_risk_level") in {"safe", "warning", "blocked"}
+        ):
             state["ai_risk_level"] = checkpoint_state["ai_risk_level"]
         state["guardian_opinion"] = checkpoint_state.get("guardian_opinion")
         state["route_reason"] = checkpoint_state.get("route_reason")
@@ -415,15 +507,16 @@ async def edit_bill(
     if not can_manage_bill(bill, member, user.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "只有创建者或管理员可以修改")
 
-    try:
-        await update_bill(db, redis, bill, payload)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    await db.commit()
-    refreshed = await get_bill_with_access(db, bill_id, user.id)
-    if refreshed is None:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "账单更新后读取失败")
-    return BillOut.model_validate(refreshed[0])
+    async with ledger_write_lock(redis, bill.ledger_id):
+        try:
+            await update_bill(db, redis, bill, payload)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        await db.commit()
+        refreshed = await get_bill_with_access(db, bill_id, user.id)
+        if refreshed is None:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "账单更新后读取失败")
+        return BillOut.model_validate(refreshed[0])
 
 
 @router.delete("/{bill_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -440,6 +533,7 @@ async def remove_bill(
     if not can_manage_bill(bill, member, user.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "只有创建者或管理员可以删除")
 
-    await delete_bill(db, redis, bill)
-    await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    async with ledger_write_lock(redis, bill.ledger_id):
+        await delete_bill(db, redis, bill)
+        await db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)

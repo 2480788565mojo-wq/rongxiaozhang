@@ -1,7 +1,7 @@
 <template>
   <view class="page" v-if="appStore.aiEnabled">
     <button class="generate" :loading="generating" @click="generate">生成本月洞察</button>
-    <view v-for="item in insights" :key="item.id" class="insight" @click="open(item.id)">
+    <view v-for="item in insights" :key="item.id" class="insight" hover-class="pressable" @click="open(item.id)">
       <view class="insight-head">
         <text class="insight-type">{{ reportName(item.report_type) }}</text>
         <text class="insight-date">{{ item.generated_at.slice(0, 10) }}</text>
@@ -9,7 +9,7 @@
       <text class="insight-content">{{ item.content }}</text>
     </view>
     <view v-if="!insights.length" class="empty">暂无洞察报告</view>
-  </view>
+</view>
 </template>
 
 <script setup lang="ts">
@@ -44,11 +44,11 @@ function reportName(type: Insight["report_type"]) { return type === "monthly" ? 
 
 <style scoped>
 .page { min-height: 100vh; padding: 28rpx; box-sizing: border-box; }
-.generate { color: #fff; background: var(--color-primary); border-radius: var(--radius-pill); }
-.insight { margin-top: 18rpx; padding: 28rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.generate { width: 100%; height: var(--button-height-lg); border: 0; color: #fff; background: var(--color-primary); border-radius: var(--radius-pill); font-size: var(--button-font-lg); font-weight: 600; line-height: var(--button-height-lg); }
+.insight { margin-top: 16rpx; padding: 26rpx; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .insight-head { display: flex; align-items: center; justify-content: space-between; }
-.insight-type { padding: 7rpx 13rpx; border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
-.insight-date { color: var(--color-text-secondary); font-size: 23rpx; }
-.insight-content { display: -webkit-box; margin-top: 14rpx; overflow: hidden; color: var(--color-text-secondary); line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.empty { margin-top: 18rpx; padding: 140rpx 24rpx; border-radius: var(--radius-lg); color: var(--color-text-secondary); background: var(--color-surface); text-align: center; }
+.insight-type { padding: 7rpx 13rpx; border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-primary-soft); font-size: 24rpx; font-weight: 600; }
+.insight-date { color: var(--color-text-secondary); font-size: 22rpx; }
+.insight-content { display: -webkit-box; margin-top: 14rpx; overflow: hidden; color: var(--color-text-secondary); font-size: 27rpx; line-height: 1.65; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.empty { margin-top: 16rpx; padding: 120rpx 24rpx; border-radius: var(--radius-lg); color: var(--color-text-secondary); background: var(--color-surface); box-shadow: var(--shadow-sm); font-size: 24rpx; line-height: 1.6; text-align: center; }
 </style>
