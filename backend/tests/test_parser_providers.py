@@ -102,16 +102,16 @@ async def test_whitespace_only_keys_count_as_missing(monkeypatch):
 
 async def test_keys_are_stripped_before_use(monkeypatch):
     use_settings(monkeypatch, qwen="  qwen-key  ", deepseek="  deepseek-key ")
-    factory = install_fake_llm(monkeypatch, {"qwen": QWEN_RESULT})
+    factory = install_fake_llm(monkeypatch, {"deepseek": DEEPSEEK_RESULT})
 
-    assert parser.configured_parser_providers() == ["qwen", "deepseek"]
-    assert await parser.call_parser_llm(MESSAGES, TOOLS) == QWEN_RESULT
-    assert factory.providers == ["qwen"]
+    assert parser.configured_parser_providers() == ["deepseek", "qwen"]
+    assert await parser.call_parser_llm(MESSAGES, TOOLS) == DEEPSEEK_RESULT
+    assert factory.providers == ["deepseek"]
 
 
-def test_provider_order_is_qwen_then_deepseek(monkeypatch):
+def test_provider_order_is_deepseek_then_qwen(monkeypatch):
     use_settings(monkeypatch, qwen="qwen-key", deepseek="deepseek-key")
-    assert parser.configured_parser_providers() == ["qwen", "deepseek"]
+    assert parser.configured_parser_providers() == ["deepseek", "qwen"]
 
 
 @pytest.mark.parametrize(
@@ -119,7 +119,7 @@ def test_provider_order_is_qwen_then_deepseek(monkeypatch):
     [
         ("qwen-key", "", ["qwen"]),
         ("", "deepseek-key", ["deepseek"]),
-        ("qwen-key", "deepseek-key", ["qwen", "deepseek"]),
+        ("qwen-key", "deepseek-key", ["deepseek", "qwen"]),
         ("", "", []),
     ],
 )
@@ -151,17 +151,17 @@ async def test_deepseek_only_uses_deepseek(monkeypatch):
     assert factory.clients[0].calls == [(MESSAGES, TOOLS)]
 
 
-async def test_qwen_error_falls_back_to_deepseek(monkeypatch):
+async def test_deepseek_error_falls_back_to_qwen(monkeypatch):
     use_settings(monkeypatch, qwen="qwen-key", deepseek="deepseek-key")
     factory = install_fake_llm(
         monkeypatch,
-        {"qwen": RuntimeError("qwen down"), "deepseek": DEEPSEEK_RESULT},
+        {"deepseek": RuntimeError("deepseek down"), "qwen": QWEN_RESULT},
     )
 
     result = await parser.call_parser_llm(MESSAGES, TOOLS)
 
-    assert result == DEEPSEEK_RESULT
-    assert factory.providers == ["qwen", "deepseek"]
+    assert result == QWEN_RESULT
+    assert factory.providers == ["deepseek", "qwen"]
     assert len(factory.clients[0].calls) == 1
     assert len(factory.clients[1].calls) == 1
 
@@ -170,14 +170,14 @@ async def test_fallback_logs_primary_provider_failure(monkeypatch, caplog):
     use_settings(monkeypatch, qwen="qwen-key", deepseek="deepseek-key")
     install_fake_llm(
         monkeypatch,
-        {"qwen": RuntimeError("qwen down"), "deepseek": DEEPSEEK_RESULT},
+        {"deepseek": RuntimeError("deepseek down"), "qwen": QWEN_RESULT},
     )
 
     with caplog.at_level("WARNING", logger="app.agents.parser"):
         result = await parser.call_parser_llm(MESSAGES, TOOLS)
 
-    assert result == DEEPSEEK_RESULT
-    assert "qwen" in caplog.text
+    assert result == QWEN_RESULT
+    assert "deepseek" in caplog.text
     assert "RuntimeError" in caplog.text
 
 
@@ -185,31 +185,31 @@ async def test_error_then_empty_result_returns_none_not_stale_error(monkeypatch)
     use_settings(monkeypatch, qwen="qwen-key", deepseek="deepseek-key")
     install_fake_llm(
         monkeypatch,
-        {"qwen": RuntimeError("qwen down"), "deepseek": None},
+        {"deepseek": RuntimeError("deepseek down"), "qwen": None},
     )
 
     assert await parser.call_parser_llm(MESSAGES, TOOLS) is None
 
 
-async def test_qwen_none_falls_back_to_deepseek(monkeypatch):
+async def test_deepseek_none_falls_back_to_qwen(monkeypatch):
     use_settings(monkeypatch, qwen="qwen-key", deepseek="deepseek-key")
     factory = install_fake_llm(
         monkeypatch,
-        {"qwen": None, "deepseek": DEEPSEEK_RESULT},
+        {"deepseek": None, "qwen": QWEN_RESULT},
     )
 
     result = await parser.call_parser_llm(MESSAGES, TOOLS)
 
-    assert result == DEEPSEEK_RESULT
-    assert factory.providers == ["qwen", "deepseek"]
+    assert result == QWEN_RESULT
+    assert factory.providers == ["deepseek", "qwen"]
 
 
 async def test_all_providers_return_none_returns_none(monkeypatch):
     use_settings(monkeypatch, qwen="qwen-key", deepseek="deepseek-key")
-    factory = install_fake_llm(monkeypatch, {"qwen": None, "deepseek": None})
+    factory = install_fake_llm(monkeypatch, {"deepseek": None, "qwen": None})
 
     assert await parser.call_parser_llm(MESSAGES, TOOLS) is None
-    assert factory.providers == ["qwen", "deepseek"]
+    assert factory.providers == ["deepseek", "qwen"]
 
 
 async def test_all_providers_raise_raises_last_error(monkeypatch):
@@ -218,12 +218,12 @@ async def test_all_providers_raise_raises_last_error(monkeypatch):
     deepseek_error = RuntimeError("deepseek down")
     factory = install_fake_llm(
         monkeypatch,
-        {"qwen": qwen_error, "deepseek": deepseek_error},
+        {"deepseek": deepseek_error, "qwen": qwen_error},
     )
 
     with pytest.raises(RuntimeError) as excinfo:
         await parser.call_parser_llm(MESSAGES, TOOLS)
 
-    assert excinfo.value is deepseek_error
-    assert factory.providers == ["qwen", "deepseek"]
+    assert excinfo.value is qwen_error
+    assert factory.providers == ["deepseek", "qwen"]
     assert len(factory.clients) == 2

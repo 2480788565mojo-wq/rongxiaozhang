@@ -28,13 +28,13 @@ CLARIFICATION_QUESTIONS = {
 
 
 def configured_parser_providers() -> list[str]:
-    """按可用 Key 返回 Parser 的 Provider 顺序，Qwen 优先、DeepSeek 兜底。"""
+    """按可用 Key 返回 Parser 的 Provider 顺序，DeepSeek 优先、Qwen 可选兜底。"""
     settings = get_settings()
     providers: list[str] = []
-    if settings.QWEN_API_KEY.strip():
-        providers.append("qwen")
     if settings.DEEPSEEK_API_KEY.strip():
         providers.append("deepseek")
+    if settings.QWEN_API_KEY.strip():
+        providers.append("qwen")
     return providers
 
 

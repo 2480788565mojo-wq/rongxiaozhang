@@ -108,7 +108,8 @@
 | MySQL 8.0 | 业务数据（用户、账本、账单、预算、分类、账户、洞察等） |
 | Redis 7.0 | 限流、预算计数器、分布式锁、SSE |
 | ChromaDB + sentence-transformers | 理财知识库向量检索（RAG） |
-| DeepSeek-V3 / Qwen-Max | LLM 混合路由（高频解析用 DeepSeek，深度推理用 Qwen） |
+| DeepSeek-V4.1-Flash（`deepseek-flash`） | 默认 LLM；AI 记账解析与消费洞察统一走 DeepSeek |
+| Qwen-Plus（可选） | 仅作为可选兜底；不配置 `QWEN_API_KEY` 时不启用 |
 | SSE（sse-starlette） | 流式推送 AI 处理过程 |
 | Docker | 可选容器化部署；生产当前使用 Nginx + systemd + Uvicorn |
 | Nginx + systemd | HTTPS 反向代理、进程守护与开机自启 |
@@ -226,7 +227,9 @@ alembic upgrade head                                 # 应用迁移
 | `REDIS_URL` | Redis 连接串 |
 | `JWT_SECRET` | JWT 签名密钥（≥32 位随机字符） |
 | `WECHAT_APPID` / `WECHAT_SECRET` | 微信小程序凭据 |
-| `DEEPSEEK_API_KEY` / `QWEN_API_KEY` | 大模型 API 密钥 |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
+| `DEEPSEEK_MODEL` | 默认 `deepseek-flash`（DeepSeek-V4.1-Flash 的 API ID） |
+| `QWEN_API_KEY` | 可选 Qwen 兜底；留空则完全不调用 Qwen |
 | `CHROMA_PERSIST_DIR` | ChromaDB 持久化目录 |
 | `EMBEDDING_MODEL` | 中文向量模型（默认 `BAAI/bge-small-zh-v1.5`） |
 | `INSIGHT_WORKER_ENABLED` | 是否启用消费洞察后台任务 |

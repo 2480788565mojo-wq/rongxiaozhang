@@ -17,6 +17,16 @@ from app.rag.retriever import retrieve_relevant_tips
 INSIGHT_QUEUE = "insight:generation:queue"
 settings = get_settings()
 
+
+def configured_insight_provider() -> str | None:
+    """Prefer DeepSeek when configured; keep Qwen as a legacy fallback."""
+    if settings.DEEPSEEK_API_KEY.strip():
+        return "deepseek"
+    if settings.QWEN_API_KEY.strip():
+        return "qwen"
+    return None
+
+
 QUEUE_PUSH_IF_AVAILABLE_SCRIPT = """
 local size = redis.call('LLEN', KEYS[1])
 if size >= tonumber(ARGV[1]) then
@@ -147,11 +157,12 @@ async def generate_insight_report(
 
     draft = _fallback_draft(snapshot, tips)
     client = llm_client
-    if client is None and settings.QWEN_API_KEY:
+    provider = configured_insight_provider()
+    if client is None and provider is not None:
         # Keep the external SDK optional for local/offline report generation.
         from app.core.llm import LLMClient
 
-        client = LLMClient("qwen")
+        client = LLMClient(provider)
     if client is not None:
         tool = {
             "type": "function",
